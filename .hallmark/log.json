@@ -1,0 +1,60 @@
+{
+  "builds": [
+    {
+      "date": "2026-07-24",
+      "genre": "editorial",
+      "theme": "custom",
+      "theme_axes": "light / roman-serif / coral",
+      "vibe": "bright briefing masthead",
+      "macrostructure": "Overlay Reader",
+      "nav": "N9 text back-link",
+      "footer": "none",
+      "enrichment": "none",
+      "notes": "详情页只保留长摘要；底部输入入口固定显示，展开后以压暗原摘要的专业对话层承载追问。"
+    },
+    {
+      "date": "2026-07-23",
+      "genre": "editorial",
+      "theme": "custom",
+      "theme_axes": "light / roman-serif / coral",
+      "vibe": "bright briefing masthead",
+      "macrostructure": "Long Document",
+      "nav": "N9 text back-link",
+      "footer": "none",
+      "enrichment": "none",
+      "notes": "第 11 步：将单行标题入口连接至完整事件阅读页，展示摘要、关注点、更新时间及可打开的虚构示例出处。"
+    },
+    {
+      "date": "2026-07-23",
+      "genre": "editorial",
+      "theme": "custom",
+      "theme_axes": "light / roman-serif / coral",
+      "vibe": "bright briefing masthead",
+      "macrostructure": "Masthead Index",
+      "nav": "N6 compact masthead",
+      "footer": "Ft2 inline rule",
+      "enrichment": "none",
+      "notes": "以用户提供的刊头层级为参考，新增居中刊头、日期版号和双线分隔；保留单行标题与详情入口，改用薄荷纸面和珊瑚色强调。"
+    },
+    {
+      "date": "2026-07-23",
+      "genre": "editorial",
+      "theme": "Almanac",
+      "macrostructure": "Index-First",
+      "nav": "N9 compact index",
+      "footer": "none",
+      "enrichment": "none",
+      "notes": "按用户要求收紧为单行标题流；首页不显示摘要、来源或重要性，详情页承载完整内容。"
+    },
+    {
+      "date": "2026-07-23",
+      "genre": "editorial",
+      "theme": "Almanac",
+      "macrostructure": "Index-First",
+      "nav": "N9",
+      "footer": "Ft2",
+      "enrichment": "none",
+      "notes": "第 10 步：首页展示虚构演示简报，并明确数据边界。"
+    }
+  ]
+}

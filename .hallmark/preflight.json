@@ -1,0 +1,12 @@
+{
+  "genre": "editorial",
+  "theme": "custom: bright briefing masthead",
+  "macrostructure": "Masthead Index",
+  "audience": "希望快速读取当天国际局势重点的中文读者",
+  "useCase": "每日一页简报；第 12 步后可从事件继续追问",
+  "tone": "清爽、专业、带轻微俏皮感",
+  "media": "text-only",
+  "density": "single-line title stream; 12 visible rows on mobile",
+  "responsiveTargets": [320, 375, 414, 768],
+  "dataMode": "fictional demo data"
+}

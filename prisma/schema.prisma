@@ -1,0 +1,236 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SourceKind {
+  OFFICIAL
+  WIRE
+  MEDIA
+}
+
+enum ArticleLanguage {
+  ZH
+  EN
+  OTHER
+}
+
+enum ArticleStatus {
+  ACTIVE
+  SUPPRESSED
+}
+
+enum StoryStatus {
+  CANDIDATE
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ClaimKind {
+  FACT
+  ANALYSIS
+}
+
+enum ClaimStatus {
+  DRAFT
+  VERIFIED
+  DISPUTED
+  REJECTED
+}
+
+enum DigestStatus {
+  DRAFT
+  PUBLISHED
+  SUPERSEDED
+}
+
+enum ChatMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model NewsSource {
+  id         String     @id @default(uuid())
+  name       String
+  domain     String     @unique
+  kind       SourceKind
+  trustScore Int        @default(50)
+  isEnabled  Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  articles Article[]
+}
+
+model Article {
+  id           String          @id @default(uuid())
+  sourceId     String
+  canonicalUrl String          @unique
+  externalId   String?
+  title        String
+  excerpt      String?
+  publishedAt  DateTime
+  language     ArticleLanguage
+  contentHash  String
+  status       ArticleStatus   @default(ACTIVE)
+  ingestedAt   DateTime        @default(now())
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  source           NewsSource            @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  clusterLinks     ClusterArticle[]
+  claimCitations   ClaimCitation[]
+  messageCitations ChatMessageCitation[]
+
+  @@unique([sourceId, externalId])
+  @@index([publishedAt])
+  @@index([contentHash])
+}
+
+model StoryCluster {
+  id              String      @id @default(uuid())
+  headline        String
+  summary         String?
+  whyItMatters    String?
+  importanceScore Float       @default(0)
+  status          StoryStatus @default(CANDIDATE)
+  startedAt       DateTime?
+  lastEventAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  clusterArticles ClusterArticle[]
+  claims          Claim[]
+  digestItems     DigestItem[]
+  chatThreads     ChatThread[]
+
+  @@index([importanceScore])
+  @@index([lastEventAt])
+}
+
+model ClusterArticle {
+  storyId        String
+  articleId      String
+  relevanceScore Float    @default(0)
+  isPrimary      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  story   StoryCluster @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  article Article      @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@id([storyId, articleId])
+  @@index([articleId])
+}
+
+model Claim {
+  id        String      @id @default(uuid())
+  storyId   String
+  text      String
+  kind      ClaimKind
+  status    ClaimStatus @default(DRAFT)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  story     StoryCluster    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  citations ClaimCitation[]
+
+  @@index([storyId, status])
+}
+
+model ClaimCitation {
+  id                String   @id @default(uuid())
+  claimId           String
+  articleId         String
+  supportingExcerpt String
+  citationOrder     Int
+  createdAt         DateTime @default(now())
+
+  claim   Claim   @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  article Article @relation(fields: [articleId], references: [id], onDelete: Restrict)
+
+  @@unique([claimId, citationOrder])
+  @@index([articleId])
+}
+
+model Digest {
+  id          String       @id @default(uuid())
+  digestDate  DateTime     @db.Date
+  revision    Int
+  status      DigestStatus @default(DRAFT)
+  publishedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  items DigestItem[]
+
+  @@unique([digestDate, revision])
+  @@index([digestDate, status])
+}
+
+model DigestItem {
+  id               String   @id @default(uuid())
+  digestId         String
+  storyId          String
+  position         Int
+  headlineSnapshot String
+  summarySnapshot  String
+  impactSnapshot   String
+  createdAt        DateTime @default(now())
+
+  digest Digest       @relation(fields: [digestId], references: [id], onDelete: Cascade)
+  story  StoryCluster @relation(fields: [storyId], references: [id], onDelete: Restrict)
+
+  @@unique([digestId, storyId])
+  @@unique([digestId, position])
+  @@index([storyId])
+}
+
+model ChatThread {
+  id                   String   @id @default(uuid())
+  storyId              String
+  anonymousSessionHash String
+  expiresAt            DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  story    StoryCluster  @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@unique([storyId, anonymousSessionHash])
+  @@index([expiresAt])
+}
+
+model ChatMessage {
+  id        String          @id @default(uuid())
+  threadId  String
+  role      ChatMessageRole
+  content   String
+  sequence  Int
+  createdAt DateTime        @default(now())
+
+  thread    ChatThread            @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  citations ChatMessageCitation[]
+
+  @@unique([threadId, sequence])
+}
+
+model ChatMessageCitation {
+  id                String   @id @default(uuid())
+  messageId         String
+  articleId         String
+  supportingExcerpt String
+  citationOrder     Int
+  createdAt         DateTime @default(now())
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  article Article     @relation(fields: [articleId], references: [id], onDelete: Restrict)
+
+  @@unique([messageId, citationOrder])
+  @@index([articleId])
+}

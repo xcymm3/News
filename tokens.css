@@ -1,0 +1,45 @@
+:root {
+  --color-paper: oklch(98.4% 0.011 180);
+  --color-paper-raised: oklch(96% 0.019 180);
+  --color-paper-muted: oklch(91% 0.035 180);
+  --color-ink: oklch(25% 0.032 256);
+  --color-ink-soft: oklch(37% 0.03 256);
+  --color-muted: oklch(52% 0.028 256);
+  --color-rule: oklch(75% 0.033 190);
+  --color-rule-strong: oklch(42% 0.045 256);
+  --color-accent: oklch(57% 0.17 28);
+  --color-accent-ink: var(--color-paper);
+  --color-accent-soft: oklch(93% 0.045 28);
+  --color-accent-secondary: oklch(67% 0.105 180);
+  --color-focus: oklch(51% 0.14 256);
+
+  --font-display: var(--font-newsreader), "Noto Serif SC", "Songti SC", serif;
+  --font-body: var(--font-geist-sans), "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-mono: var(--font-geist-mono), "Sarasa Mono SC", monospace;
+
+  --text-xs: 0.64rem;
+  --text-sm: 0.8rem;
+  --text-base: 1rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.5625rem;
+  --text-xl: 1.9531rem;
+  --text-2xl: 2.4414rem;
+  --text-3xl: 3.0518rem;
+  --text-4xl: 3.8147rem;
+
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2.25rem;
+  --space-xl: 3.375rem;
+  --space-2xl: 5.0625rem;
+  --space-3xl: 7.5938rem;
+
+  --page-gutter: clamp(1rem, 4vw, 3.25rem);
+  --content-max: 80rem;
+  --rule-hair: 1px;
+  --radius-none: 0;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}

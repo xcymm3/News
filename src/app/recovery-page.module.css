@@ -1,0 +1,86 @@
+.page {
+  display: grid;
+  min-block-size: 100dvh;
+  place-items: center;
+  padding: var(--page-gutter);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.panel {
+  display: grid;
+  inline-size: min(100%, 34rem);
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  border: var(--rule-hair) solid var(--color-rule-strong);
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(var(--text-xl), 6vw, var(--text-3xl));
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.copy {
+  max-inline-size: 34ch;
+  margin: 0 auto;
+  color: var(--color-ink-soft);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.65;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-xs);
+  margin-block-start: var(--space-xs);
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-md);
+  border: var(--rule-hair) solid var(--color-rule-strong);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.primaryAction {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  cursor: pointer;
+}
+
+.secondaryAction {
+  background: transparent;
+  color: var(--color-ink);
+}
+
+.primaryAction:hover,
+.secondaryAction:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+.secondaryAction:hover {
+  background: var(--color-accent);
+}
