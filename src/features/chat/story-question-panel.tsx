@@ -18,6 +18,7 @@ function makeMessageId(role: StoryChatMessage["role"]) {
 }
 
 export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelProps) {
+  const dockInputId = useId();
   const inputId = useId();
   const hintId = useId();
   const errorId = useId();
@@ -27,6 +28,7 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const latestAnswer = [...messages].reverse().find((message) => message.role === "assistant");
 
   const openDialog = () => {
     setIsExpanded(true);
@@ -125,21 +127,48 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
   return (
     <>
       <aside className={styles.dock} aria-label="AI 追问入口">
-        <div className={styles.dockInner}>
-          <input
-            aria-label="向 AI 提问"
-            className={styles.dockInput}
-            onChange={(event) => {
-              setDraft(event.target.value);
-              openDialog();
-            }}
-            onFocus={openDialog}
-            placeholder="向 AI 追问这条新闻…"
-            value={draft}
-          />
-          <button className={styles.expandButton} onClick={openDialog} type="button">
-            展开
-          </button>
+        <div className={styles.dockContent}>
+          {latestAnswer ? (
+            <section aria-live="polite" className={styles.answerPreview}>
+              <div className={styles.previewHeader}>
+                <p className={styles.previewEyebrow}>AI 回答</p>
+                <button className={styles.previewExpandButton} onClick={openDialog} type="button">
+                  完整对话
+                </button>
+              </div>
+              <p className={styles.previewText}>{latestAnswer.content}</p>
+            </section>
+          ) : null}
+          <form className={styles.dockInner} onSubmit={submitQuestion}>
+            <label className={styles.srOnly} htmlFor={dockInputId}>
+              向 AI 提问
+            </label>
+            <input
+              aria-describedby={error ? errorId : undefined}
+              aria-invalid={Boolean(error)}
+              className={styles.dockInput}
+              disabled={isSubmitting}
+              id={dockInputId}
+              maxLength={500}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                setError(null);
+              }}
+              placeholder="向 AI 追问这条新闻…"
+              value={draft}
+            />
+            <button className={styles.compactSubmitButton} disabled={isSubmitting || !draft.trim()} type="submit">
+              {isSubmitting ? "回答中" : "发送"}
+            </button>
+            <button className={styles.expandButton} disabled={isSubmitting} onClick={openDialog} type="button">
+              展开
+            </button>
+          </form>
+          {error ? (
+            <p className={styles.dockError} id={errorId} role="alert">
+              {error}
+            </p>
+          ) : null}
         </div>
       </aside>
 

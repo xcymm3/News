@@ -41,5 +41,6 @@
   --content-max: 80rem;
   --rule-hair: 1px;
   --radius-none: 0;
+  --radius-sm: 0.5rem;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
