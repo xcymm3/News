@@ -49,7 +49,7 @@
 }
 
 .previewText {
-  max-block-size: 3.36em;
+  max-block-size: 5.04em;
   margin: 0;
   overflow: hidden;
   color: var(--color-ink-soft);
@@ -57,7 +57,7 @@
   font-size: var(--text-sm);
   line-height: 1.68;
   overflow-wrap: anywhere;
-  mask-image: linear-gradient(to bottom, currentColor 0%, currentColor 58%, transparent 100%);
+  mask-image: linear-gradient(to bottom, currentColor 0%, currentColor 74%, transparent 100%);
 }
 
 .dockInner {

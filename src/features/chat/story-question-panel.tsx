@@ -3,8 +3,8 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 
 import type {
+  StoryChatAnswer,
   StoryChatMessage,
-  StoryQuestionResponse,
 } from "./types";
 import styles from "./story-question-panel.module.css";
 
@@ -22,6 +22,12 @@ type AnswerBlock =
 const headingPattern = /^#{1,3}\s+(.+)$/;
 const orderedItemPattern = /^\d+[.)]\s+(.+)$/;
 const unorderedItemPattern = /^[-*]\s+(.+)$/;
+const TYPEWRITER_INTERVAL_MS = 14;
+
+type StoryQuestionStreamEvent =
+  | { type: "delta"; content: string }
+  | { type: "done"; answer: StoryChatAnswer }
+  | { type: "error"; message: string };
 
 function parseAnswerBlocks(content: string): AnswerBlock[] {
   const lines = content.replace(/\r\n?/g, "\n").split("\n");
@@ -159,6 +165,11 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
   const hintId = useId();
   const errorId = useId();
   const dialogInputRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimerRef = useRef<number | null>(null);
+  const pendingContentRef = useRef("");
+  const visibleContentRef = useRef("");
+  const completedAnswerRef = useRef<StoryChatAnswer | null>(null);
+  const activeAnswerIdRef = useRef<string | null>(null);
   const [messages, setMessages] = useState<StoryChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -173,6 +184,50 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
   const closeDialog = () => {
     if (!isSubmitting) {
       setIsExpanded(false);
+    }
+  };
+
+  const revealNextCharacter = () => {
+    const answerId = activeAnswerIdRef.current;
+    if (!answerId) {
+      return;
+    }
+
+    const nextCharacter = pendingContentRef.current.slice(0, 1);
+    if (nextCharacter) {
+      pendingContentRef.current = pendingContentRef.current.slice(1);
+      visibleContentRef.current += nextCharacter;
+      setMessages((currentMessages) => currentMessages.map((message) => (
+        message.id === answerId ? { ...message, content: visibleContentRef.current } : message
+      )));
+      typingTimerRef.current = window.setTimeout(revealNextCharacter, TYPEWRITER_INTERVAL_MS);
+      return;
+    }
+
+    const completedAnswer = completedAnswerRef.current;
+    if (!completedAnswer) {
+      typingTimerRef.current = null;
+      return;
+    }
+
+    setMessages((currentMessages) => currentMessages.map((message) => (
+      message.id === answerId
+        ? { ...message, content: completedAnswer.answer, citations: completedAnswer.citations }
+        : message
+    )));
+    typingTimerRef.current = null;
+    pendingContentRef.current = "";
+    visibleContentRef.current = "";
+    completedAnswerRef.current = null;
+    activeAnswerIdRef.current = null;
+    setIsSubmitting(false);
+  };
+
+  const enqueueStreamContent = (content: string) => {
+    pendingContentRef.current += content;
+
+    if (typingTimerRef.current === null) {
+      revealNextCharacter();
     }
   };
 
@@ -196,6 +251,12 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
     };
   }, [isExpanded, isSubmitting]);
 
+  useEffect(() => () => {
+    if (typingTimerRef.current !== null) {
+      window.clearTimeout(typingTimerRef.current);
+    }
+  }, []);
+
   const submitQuestion = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedQuestion = draft.trim();
@@ -212,13 +273,24 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
       content: normalizedQuestion,
       createdAt: new Date().toISOString(),
     };
+    const answerMessageId = makeMessageId("assistant");
+    const optimisticAnswer: StoryChatMessage = {
+      id: answerMessageId,
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+    };
 
     const recentTurns = messages.slice(-8).map((message) => ({
       role: message.role,
       content: message.content,
     }));
 
-    setMessages((currentMessages) => [...currentMessages, optimisticMessage]);
+    activeAnswerIdRef.current = answerMessageId;
+    pendingContentRef.current = "";
+    visibleContentRef.current = "";
+    completedAnswerRef.current = null;
+    setMessages((currentMessages) => [...currentMessages, optimisticMessage, optimisticAnswer]);
     setIsSubmitting(true);
 
     try {
@@ -233,29 +305,74 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
           recentTurns,
         }),
       });
-      const payload = (await response.json()) as StoryQuestionResponse & {
-        error?: { message?: string };
-      };
-
-      if (!response.ok || !payload.data?.answer) {
-        throw new Error(payload.error?.message ?? "暂时无法整理回答，请稍后重试。");
+      if (!response.ok || !response.body) {
+        const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+        throw new Error(payload?.error?.message ?? "暂时无法整理回答，请稍后重试。");
       }
 
-      setMessages((currentMessages) => [
-        ...currentMessages,
-        {
-          id: makeMessageId("assistant"),
-          role: "assistant",
-          content: payload.data.answer.answer,
-          citations: payload.data.answer.citations,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let pending = "";
+      let completedAnswer: StoryChatAnswer | null = null;
+
+      const processEvent = (line: string) => {
+        if (!line) {
+          return;
+        }
+
+        const event = JSON.parse(line) as StoryQuestionStreamEvent;
+        if (event.type === "delta") {
+          enqueueStreamContent(event.content);
+          return;
+        }
+
+        if (event.type === "done") {
+          completedAnswer = event.answer;
+          return;
+        }
+
+        throw new Error(event.message);
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        pending += decoder.decode(value, { stream: !done });
+        const lines = pending.split("\n");
+        pending = lines.pop() ?? "";
+
+        for (const line of lines) {
+          processEvent(line);
+        }
+
+        if (done) {
+          processEvent(pending);
+          break;
+        }
+      }
+
+      if (!completedAnswer) {
+        throw new Error("DeepSeek 未返回完整回答，请稍后重试。");
+      }
+
+      completedAnswerRef.current = completedAnswer;
+      if (typingTimerRef.current === null) {
+        revealNextCharacter();
+      }
     } catch (caughtError) {
-      setMessages((currentMessages) => currentMessages.filter((message) => message.id !== optimisticMessage.id));
+      if (typingTimerRef.current !== null) {
+        window.clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+
+      pendingContentRef.current = "";
+      visibleContentRef.current = "";
+      completedAnswerRef.current = null;
+      activeAnswerIdRef.current = null;
+      setMessages((currentMessages) => currentMessages.filter((message) => (
+        message.id !== optimisticMessage.id && message.id !== answerMessageId
+      )));
       setDraft(normalizedQuestion);
       setError(caughtError instanceof Error ? caughtError.message : "暂时无法整理回答，请稍后重试。");
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -272,7 +389,9 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
                   完整对话
                 </button>
               </div>
-              <p className={styles.previewText}>{plainTextFromMarkdown(latestAnswer.content)}</p>
+              <p className={styles.previewText}>
+                {latestAnswer.content ? plainTextFromMarkdown(latestAnswer.content) : "正在生成回答…"}
+              </p>
             </section>
           ) : null}
           <form className={styles.dockInner} onSubmit={submitQuestion}>

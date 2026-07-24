@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createGroundedStoryAnswer, StoryQuestionError } from "./story-question-service";
+import {
+  createGroundedStoryAnswer,
+  StoryQuestionError,
+  streamGroundedStoryAnswer,
+} from "./story-question-service";
 import type { DigestStory } from "@/features/digest/types";
 
 const story: DigestStory = {
@@ -75,5 +79,30 @@ describe("createGroundedStoryAnswer", () => {
       code: "STORY_QUESTION_UNAVAILABLE",
       status: 502,
     } satisfies Partial<StoryQuestionError>);
+  });
+
+  it("forwards DeepSeek stream chunks and preserves the completed formatted answer", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "test-key");
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"先说结论。\\n\\n1. **第一点**"}}]}\n\n'));
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"：说明。"}}]}\n\n'));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(stream, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const deltas: string[] = [];
+
+    const answer = await streamGroundedStoryAnswer(story, "为什么？", [], (content) => deltas.push(content));
+
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { stream?: boolean };
+
+    expect(request.stream).toBe(true);
+    expect(deltas).toEqual(["先说结论。\n\n1. **第一点**", "：说明。"]);
+    expect(answer.answer).toBe("先说结论。\n\n1. **第一点**：说明。");
+    expect(answer.citations).toEqual([{ id: "citation-1", sourceName: "测试新闻网", sourceUrl: "https://example.test/news/1" }]);
   });
 });

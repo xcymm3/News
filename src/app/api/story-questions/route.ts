@@ -1,10 +1,11 @@
 import {
-  createGroundedStoryAnswer,
   StoryQuestionError,
+  streamGroundedStoryAnswer,
   type StoryQuestionTurn,
 } from "@/features/chat/story-question-service";
+import type { StoryChatAnswer } from "@/features/chat/types";
 import { digestService } from "@/features/digest/digest-service";
-import { getDigestDataMode } from "@/features/digest/types";
+import type { DigestStory } from "@/features/digest/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +42,46 @@ function noStoreJson(body: unknown, status = 200) {
     status,
     headers: {
       "Cache-Control": "no-store",
+    },
+  });
+}
+
+type StoryQuestionStreamEvent =
+  | { type: "delta"; content: string }
+  | { type: "done"; answer: StoryChatAnswer }
+  | { type: "error"; message: string };
+
+function createStreamResponse(
+  story: DigestStory,
+  question: string,
+  recentTurns: StoryQuestionTurn[],
+) {
+  const encoder = new TextEncoder();
+  const encode = (event: StoryQuestionStreamEvent) => encoder.encode(`${JSON.stringify(event)}\n`);
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        const answer = await streamGroundedStoryAnswer(story, question, recentTurns, (content) => {
+          controller.enqueue(encode({ type: "delta", content }));
+        });
+
+        controller.enqueue(encode({ type: "done", answer }));
+      } catch (error) {
+        const message = error instanceof StoryQuestionError
+          ? error.message
+          : "暂时无法整理回答，请稍后重试。";
+
+        controller.enqueue(encode({ type: "error", message }));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/x-ndjson; charset=utf-8",
     },
   });
 }
@@ -103,16 +144,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const answer = await createGroundedStoryAnswer(story, question, parseRecentTurns(body.recentTurns));
-
-    return noStoreJson({
-      data: { answer },
-      meta: {
-        dataMode: getDigestDataMode(digest),
-        storyId,
-        persistence: "none",
-      },
-    });
+    return createStreamResponse(story, question, parseRecentTurns(body.recentTurns));
   } catch (error) {
     if (error instanceof StoryQuestionError) {
       return noStoreJson(
