@@ -6,13 +6,13 @@ import type { DailyDigest, DigestCitation, DigestStory } from "@/features/digest
 const MAX_SEARCH_RESULTS = 12;
 const FIXED_AGENT_EVENT_COUNT = 12;
 const TARGET_RSS_SOURCE_COVERAGE = 4;
-const MAX_DOCUMENTS_PER_EVENT = 8;
-const MAX_RETRIEVED_EXCERPT_LENGTH = 900;
+const MAX_DOCUMENTS_PER_EVENT = 3;
+const MAX_RETRIEVED_EXCERPT_LENGTH = 450;
 const MAX_AGENT_STORIES = FIXED_AGENT_EVENT_COUNT;
 const DEFAULT_AGENT_CACHE_TTL_SECONDS = 30 * 60;
-const AGENT_REQUEST_TIMEOUT_MS = 30_000;
-// RSS 来源构成改变后，旧摘要不再代表当前检索语料，需强制重新生成。
-const AGENT_CACHE_SCHEMA_VERSION = 7;
+const AGENT_REQUEST_TIMEOUT_MS = 90_000;
+// RSS 检索材料压缩后，旧摘要不再代表当前检索语料，需强制重新生成。
+const AGENT_CACHE_SCHEMA_VERSION = 8;
 
 export type RetrievedNewsDocument = {
   articleId: string;
@@ -238,6 +238,7 @@ async function callDeepSeek(
         model: config.model,
         temperature: 0.2,
         ...body,
+        thinking: { type: "disabled" },
       }),
       cache: "no-store",
       signal: abortController.signal,
