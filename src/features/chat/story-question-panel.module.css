@@ -49,15 +49,20 @@
 }
 
 .previewText {
-  max-block-size: 5.04em;
+  block-size: 5.04em;
   margin: 0;
-  overflow: hidden;
+  overflow: hidden auto;
   color: var(--color-ink-soft);
   font-family: var(--font-body);
   font-size: var(--text-sm);
   line-height: 1.68;
   overflow-wrap: anywhere;
-  mask-image: linear-gradient(to bottom, currentColor 0%, currentColor 74%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, currentColor 26%, currentColor 100%);
+  scrollbar-width: none;
+}
+
+.previewText::-webkit-scrollbar {
+  display: none;
 }
 
 .dockInner {

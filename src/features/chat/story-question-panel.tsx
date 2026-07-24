@@ -192,6 +192,7 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
   const hintId = useId();
   const errorId = useId();
   const dialogInputRef = useRef<HTMLTextAreaElement>(null);
+  const previewTextRef = useRef<HTMLParagraphElement>(null);
   const typingTimerRef = useRef<number | null>(null);
   const pendingContentRef = useRef("");
   const visibleContentRef = useRef("");
@@ -283,6 +284,14 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
       window.clearTimeout(typingTimerRef.current);
     }
   }, []);
+
+  useEffect(() => {
+    const previewText = previewTextRef.current;
+
+    if (previewText) {
+      previewText.scrollTop = previewText.scrollHeight;
+    }
+  }, [latestAnswer?.content]);
 
   const submitQuestion = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -416,7 +425,7 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
                   完整对话
                 </button>
               </div>
-              <p className={styles.previewText}>
+              <p className={styles.previewText} ref={previewTextRef}>
                 {latestAnswer.content ? plainTextFromMarkdown(latestAnswer.content) : "正在生成回答…"}
               </p>
             </section>
@@ -483,17 +492,6 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
                       ) : (
                         <p className={styles.messageText}>{message.content}</p>
                       )}
-                      {message.citations && message.citations.length > 0 ? (
-                        <ul className={styles.citationList} aria-label="相关原文">
-                          {message.citations.map((citation) => (
-                            <li key={citation.id}>
-                              <a className={styles.citationLink} href={citation.sourceUrl} rel="noopener noreferrer" target="_blank">
-                                原文：{citation.sourceName}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
                     </li>
                   ))}
                 </ol>
