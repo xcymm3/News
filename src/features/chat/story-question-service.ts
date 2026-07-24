@@ -60,7 +60,18 @@ function createGroundedContext(story: DigestStory) {
 }
 
 function normalizeAnswer(value: unknown) {
-  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, MAX_ANSWER_LENGTH) : "";
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, MAX_ANSWER_LENGTH);
 }
 
 export async function createGroundedStoryAnswer(
@@ -87,7 +98,7 @@ export async function createGroundedStoryAnswer(
           {
             role: "system",
             content:
-              "你是具有通用知识的严谨中文助手，也负责解读当前新闻。可以直接解释稳定的通用知识、概念、背景和常识，例如“股票是什么”；不必假装这些知识只来自新闻材料。涉及当前事件的时间敏感事实、人物当前职务、数字、进展、因果和引述时，只能以提供的新闻材料与对话为依据，不得补造未披露细节或编造来源。若材料没有回答某个当前事实，应明确说“当前材料未说明”，但可在不混淆事实的前提下补充一般背景。除非用户主动询问出处、核验或原文，否则不要默认建议用户查看 RSS 链接，也不要在回答正文中杜撰链接。回答自然、直接、中文。",
+              "你是具有通用知识的严谨中文助手，也负责解读当前新闻。可以直接解释稳定的通用知识、概念、背景和常识，例如“股票是什么”；不必假装这些知识只来自新闻材料。涉及当前事件的时间敏感事实、人物当前职务、数字、进展、因果和引述时，只能以提供的新闻材料与对话为依据，不得补造未披露细节或编造来源。若材料没有回答某个当前事实，应明确说“当前材料未说明”，但可在不混淆事实的前提下补充一般背景。除非用户主动询问出处、核验或原文，否则不要默认建议用户查看 RSS 链接，也不要在回答正文中杜撰链接。\n\n排版要求：使用清晰、克制的 Markdown。先用一两句直接回答；问题有多个要点时，用 1.、2. 的编号列表或 - 的项目列表分开说明。必要时最多使用 3 个 ### 小标题，且每段保持简短。只对关键概念使用 **加粗**，不要整段加粗。不要使用表格、代码块、引用块、Markdown 链接或大标题。回答自然、直接、中文。",
           },
           {
             role: "user",

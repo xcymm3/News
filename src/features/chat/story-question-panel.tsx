@@ -13,6 +13,142 @@ type StoryQuestionPanelProps = {
   isDemoData: boolean;
 };
 
+type AnswerBlock =
+  | { type: "heading"; content: string }
+  | { type: "paragraph"; content: string }
+  | { type: "ordered-list"; items: string[] }
+  | { type: "unordered-list"; items: string[] };
+
+const headingPattern = /^#{1,3}\s+(.+)$/;
+const orderedItemPattern = /^\d+[.)]\s+(.+)$/;
+const unorderedItemPattern = /^[-*]\s+(.+)$/;
+
+function parseAnswerBlocks(content: string): AnswerBlock[] {
+  const lines = content.replace(/\r\n?/g, "\n").split("\n");
+  const blocks: AnswerBlock[] = [];
+  let lineIndex = 0;
+
+  while (lineIndex < lines.length) {
+    const line = lines[lineIndex].trim();
+
+    if (!line) {
+      lineIndex += 1;
+      continue;
+    }
+
+    const headingMatch = line.match(headingPattern);
+    if (headingMatch) {
+      blocks.push({ type: "heading", content: headingMatch[1] });
+      lineIndex += 1;
+      continue;
+    }
+
+    const orderedMatch = line.match(orderedItemPattern);
+    if (orderedMatch) {
+      const items: string[] = [];
+
+      while (lineIndex < lines.length) {
+        const itemMatch = lines[lineIndex].trim().match(orderedItemPattern);
+        if (!itemMatch) {
+          break;
+        }
+
+        items.push(itemMatch[1]);
+        lineIndex += 1;
+      }
+
+      blocks.push({ type: "ordered-list", items });
+      continue;
+    }
+
+    const unorderedMatch = line.match(unorderedItemPattern);
+    if (unorderedMatch) {
+      const items: string[] = [];
+
+      while (lineIndex < lines.length) {
+        const itemMatch = lines[lineIndex].trim().match(unorderedItemPattern);
+        if (!itemMatch) {
+          break;
+        }
+
+        items.push(itemMatch[1]);
+        lineIndex += 1;
+      }
+
+      blocks.push({ type: "unordered-list", items });
+      continue;
+    }
+
+    const paragraphLines: string[] = [];
+
+    while (lineIndex < lines.length) {
+      const paragraphLine = lines[lineIndex].trim();
+      if (
+        !paragraphLine
+        || headingPattern.test(paragraphLine)
+        || orderedItemPattern.test(paragraphLine)
+        || unorderedItemPattern.test(paragraphLine)
+      ) {
+        break;
+      }
+
+      paragraphLines.push(paragraphLine);
+      lineIndex += 1;
+    }
+
+    if (paragraphLines.length > 0) {
+      blocks.push({ type: "paragraph", content: paragraphLines.join(" ") });
+    } else {
+      lineIndex += 1;
+    }
+  }
+
+  return blocks;
+}
+
+function renderInlineMarkdown(content: string) {
+  return content.split(/(\*\*[^*]+\*\*)/g).map((part, index) => (
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>
+    ) : part
+  ));
+}
+
+function FormattedAnswer({ content }: { content: string }) {
+  return (
+    <div className={styles.answerContent}>
+      {parseAnswerBlocks(content).map((block, index) => {
+        const key = `${block.type}-${index}`;
+
+        if (block.type === "heading") {
+          return <h3 className={styles.answerHeading} key={key}>{renderInlineMarkdown(block.content)}</h3>;
+        }
+
+        if (block.type === "ordered-list" || block.type === "unordered-list") {
+          const List = block.type === "ordered-list" ? "ol" : "ul";
+
+          return (
+            <List className={styles.answerList} key={key}>
+              {block.items.map((item, itemIndex) => <li key={`${item}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>)}
+            </List>
+          );
+        }
+
+        return <p key={key}>{renderInlineMarkdown(block.content)}</p>;
+      })}
+    </div>
+  );
+}
+
+function plainTextFromMarkdown(content: string) {
+  return content
+    .replace(/^#{1,3}\s+/gm, "")
+    .replace(/^\s*(?:\d+[.)]|[-*])\s+/gm, "")
+    .replace(/\*\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function makeMessageId(role: StoryChatMessage["role"]) {
   return `${role}-${crypto.randomUUID()}`;
 }
@@ -136,7 +272,7 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
                   完整对话
                 </button>
               </div>
-              <p className={styles.previewText}>{latestAnswer.content}</p>
+              <p className={styles.previewText}>{plainTextFromMarkdown(latestAnswer.content)}</p>
             </section>
           ) : null}
           <form className={styles.dockInner} onSubmit={submitQuestion}>
@@ -196,7 +332,11 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
                       key={message.id}
                     >
                       <span className={styles.messageMeta}>{message.role === "user" ? "你" : "AI"}</span>
-                      <p className={styles.messageText}>{message.content}</p>
+                      {message.role === "assistant" ? (
+                        <FormattedAnswer content={message.content} />
+                      ) : (
+                        <p className={styles.messageText}>{message.content}</p>
+                      )}
                       {message.citations && message.citations.length > 0 ? (
                         <ul className={styles.citationList} aria-label="相关原文">
                           {message.citations.map((citation) => (
