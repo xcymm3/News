@@ -165,30 +165,42 @@ function getAgentCacheTtlMs() {
 }
 
 function getDeepSeekConfig(): DeepSeekConfig {
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim() || process.env.LLM_API_KEY?.trim();
+  const baseUrl = (process.env.LLM_BASE_URL?.trim() || "https://api.deepseek.com").replace(/\/+$/, "");
+  const isDeepSeek = isDeepSeekBaseUrl(baseUrl);
+  const apiKey = isDeepSeek
+    ? process.env.DEEPSEEK_API_KEY?.trim() || process.env.LLM_API_KEY?.trim()
+    : process.env.LLM_API_KEY?.trim() || process.env.DEEPSEEK_API_KEY?.trim();
+  const model = isDeepSeek
+    ? process.env.DEEPSEEK_MODEL?.trim() || process.env.LLM_MODEL?.trim() || "deepseek-v4-flash"
+    : process.env.LLM_MODEL?.trim() || process.env.DEEPSEEK_MODEL?.trim();
 
-  if (!apiKey) {
+  if (!apiKey || !model) {
     throw new NewsAgentError(
       "AI_AGENT_NOT_CONFIGURED",
       503,
-      "尚未配置 DeepSeek API 密钥，请先在 .env.local 中填写 DEEPSEEK_API_KEY。",
+      "尚未完整配置 AI 服务，请先在 .env.local 中填写密钥、地址和模型。",
     );
   }
-
-  const baseUrl = (process.env.LLM_BASE_URL?.trim() || "https://api.deepseek.com").replace(/\/+$/, "");
-  const model = process.env.DEEPSEEK_MODEL?.trim() || process.env.LLM_MODEL?.trim() || "deepseek-v4-flash";
 
   try {
     const endpoint = new URL(baseUrl);
 
     if (endpoint.protocol !== "https:") {
-      throw new Error("The DeepSeek base URL must use HTTPS.");
+      throw new Error("The AI base URL must use HTTPS.");
     }
   } catch {
-    throw new NewsAgentError("AI_AGENT_NOT_CONFIGURED", 503, "DeepSeek API 地址配置无效。");
+    throw new NewsAgentError("AI_AGENT_NOT_CONFIGURED", 503, "AI 服务地址配置无效。");
   }
 
   return { apiKey, baseUrl, model };
+}
+
+function isDeepSeekBaseUrl(baseUrl: string) {
+  try {
+    return new URL(baseUrl).hostname === "api.deepseek.com";
+  } catch {
+    return false;
+  }
 }
 
 function parseToolCalls(value: unknown): DeepSeekToolCall[] {
@@ -238,7 +250,7 @@ async function callDeepSeek(
         model: config.model,
         temperature: 0.2,
         ...body,
-        thinking: { type: "disabled" },
+        ...(isDeepSeekBaseUrl(config.baseUrl) ? { thinking: { type: "disabled" } } : {}),
       }),
       cache: "no-store",
       signal: abortController.signal,
@@ -246,7 +258,7 @@ async function callDeepSeek(
     const responseText = await response.text();
 
     if (!response.ok) {
-      throw new NewsAgentError("AI_AGENT_UNAVAILABLE", 502, "DeepSeek 服务暂时不可用，请稍后重试。");
+      throw new NewsAgentError("AI_AGENT_UNAVAILABLE", 502, "AI 服务暂时不可用，请稍后重试。");
     }
 
     let payload: unknown;
@@ -254,7 +266,7 @@ async function callDeepSeek(
     try {
       payload = JSON.parse(responseText);
     } catch {
-      throw new NewsAgentError("AI_AGENT_INVALID_RESPONSE", 502, "DeepSeek 返回了无法识别的内容。");
+      throw new NewsAgentError("AI_AGENT_INVALID_RESPONSE", 502, "AI 服务返回了无法识别的内容。");
     }
 
     const message = isRecord(payload) && Array.isArray(payload.choices) && isRecord(payload.choices[0]) && isRecord(payload.choices[0].message)
@@ -262,7 +274,7 @@ async function callDeepSeek(
       : null;
 
     if (!message) {
-      throw new NewsAgentError("AI_AGENT_INVALID_RESPONSE", 502, "DeepSeek 未返回可用回答。");
+      throw new NewsAgentError("AI_AGENT_INVALID_RESPONSE", 502, "AI 服务未返回可用回答。");
     }
 
     return {
@@ -275,8 +287,8 @@ async function callDeepSeek(
     }
 
     const message = error instanceof Error && error.name === "AbortError"
-      ? "DeepSeek 响应超时，请稍后重试。"
-      : "DeepSeek 服务暂时不可用，请稍后重试。";
+      ? "AI 服务响应超时，请稍后重试。"
+      : "AI 服务暂时不可用，请稍后重试。";
 
     throw new NewsAgentError("AI_AGENT_UNAVAILABLE", 502, message);
   } finally {

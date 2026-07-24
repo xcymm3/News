@@ -30,15 +30,20 @@ export class StoryQuestionError extends Error {
 }
 
 function getDeepSeekConfig() {
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim() || process.env.LLM_API_KEY?.trim();
   const baseUrl = (process.env.LLM_BASE_URL?.trim() || "https://api.deepseek.com").replace(/\/+$/, "");
-  const model = process.env.DEEPSEEK_MODEL?.trim() || process.env.LLM_MODEL?.trim() || "deepseek-v4-flash";
+  const isDeepSeek = isDeepSeekBaseUrl(baseUrl);
+  const apiKey = isDeepSeek
+    ? process.env.DEEPSEEK_API_KEY?.trim() || process.env.LLM_API_KEY?.trim()
+    : process.env.LLM_API_KEY?.trim() || process.env.DEEPSEEK_API_KEY?.trim();
+  const model = isDeepSeek
+    ? process.env.DEEPSEEK_MODEL?.trim() || process.env.LLM_MODEL?.trim() || "deepseek-v4-flash"
+    : process.env.LLM_MODEL?.trim() || process.env.DEEPSEEK_MODEL?.trim();
 
-  if (!apiKey) {
+  if (!apiKey || !model) {
     throw new StoryQuestionError(
       "STORY_QUESTION_NOT_CONFIGURED",
       503,
-      "尚未配置 DeepSeek API 密钥，暂时无法进行 AI 追问。",
+      "尚未完整配置 AI 服务，暂时无法进行 AI 追问。",
     );
   }
 
@@ -46,13 +51,21 @@ function getDeepSeekConfig() {
     const endpoint = new URL(baseUrl);
 
     if (endpoint.protocol !== "https:") {
-      throw new Error("The DeepSeek base URL must use HTTPS.");
+      throw new Error("The AI base URL must use HTTPS.");
     }
   } catch {
-    throw new StoryQuestionError("STORY_QUESTION_NOT_CONFIGURED", 503, "DeepSeek API 地址配置无效。");
+    throw new StoryQuestionError("STORY_QUESTION_NOT_CONFIGURED", 503, "AI 服务地址配置无效。");
   }
 
   return { apiKey, baseUrl, model };
+}
+
+function isDeepSeekBaseUrl(baseUrl: string) {
+  try {
+    return new URL(baseUrl).hostname === "api.deepseek.com";
+  } catch {
+    return false;
+  }
 }
 
 function createGroundedContext(story: DigestStory) {
@@ -134,7 +147,7 @@ export async function createGroundedStoryAnswer(
     const responseText = await response.text();
 
     if (!response.ok) {
-      throw new StoryQuestionError("STORY_QUESTION_UNAVAILABLE", 502, "DeepSeek 服务暂时不可用，请稍后重试。");
+      throw new StoryQuestionError("STORY_QUESTION_UNAVAILABLE", 502, "AI 服务暂时不可用，请稍后重试。");
     }
 
     let payload: unknown;
@@ -142,7 +155,7 @@ export async function createGroundedStoryAnswer(
     try {
       payload = JSON.parse(responseText);
     } catch {
-      throw new StoryQuestionError("STORY_QUESTION_INVALID_RESPONSE", 502, "DeepSeek 返回了无法识别的回答。");
+      throw new StoryQuestionError("STORY_QUESTION_INVALID_RESPONSE", 502, "AI 服务返回了无法识别的回答。");
     }
 
     const answer = payload && typeof payload === "object"
@@ -153,7 +166,7 @@ export async function createGroundedStoryAnswer(
       : "";
 
     if (!answer) {
-      throw new StoryQuestionError("STORY_QUESTION_INVALID_RESPONSE", 502, "DeepSeek 未返回可用回答。");
+      throw new StoryQuestionError("STORY_QUESTION_INVALID_RESPONSE", 502, "AI 服务未返回可用回答。");
     }
 
     return {
@@ -171,8 +184,8 @@ export async function createGroundedStoryAnswer(
     }
 
     const message = error instanceof Error && error.name === "AbortError"
-      ? "DeepSeek 响应超时，请稍后重试。"
-      : "DeepSeek 服务暂时不可用，请稍后重试。";
+      ? "AI 服务响应超时，请稍后重试。"
+      : "AI 服务暂时不可用，请稍后重试。";
 
     throw new StoryQuestionError("STORY_QUESTION_UNAVAILABLE", 502, message);
   } finally {
@@ -209,7 +222,7 @@ export async function streamGroundedStoryAnswer(
     });
 
     if (!response.ok || !response.body) {
-      throw new StoryQuestionError("STORY_QUESTION_UNAVAILABLE", 502, "DeepSeek 服务暂时不可用，请稍后重试。");
+      throw new StoryQuestionError("STORY_QUESTION_UNAVAILABLE", 502, "AI 服务暂时不可用，请稍后重试。");
     }
 
     const reader = response.body.getReader();
@@ -255,7 +268,7 @@ export async function streamGroundedStoryAnswer(
 
     const answer = normalizeAnswer(rawAnswer);
     if (!answer) {
-      throw new StoryQuestionError("STORY_QUESTION_INVALID_RESPONSE", 502, "DeepSeek 未返回可用回答。");
+      throw new StoryQuestionError("STORY_QUESTION_INVALID_RESPONSE", 502, "AI 服务未返回可用回答。");
     }
 
     return {
@@ -272,8 +285,8 @@ export async function streamGroundedStoryAnswer(
     }
 
     const message = error instanceof Error && error.name === "AbortError"
-      ? "DeepSeek 响应超时，请稍后重试。"
-      : "DeepSeek 服务暂时不可用，请稍后重试。";
+      ? "AI 服务响应超时，请稍后重试。"
+      : "AI 服务暂时不可用，请稍后重试。";
 
     throw new StoryQuestionError("STORY_QUESTION_UNAVAILABLE", 502, message);
   } finally {

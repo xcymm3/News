@@ -155,6 +155,33 @@ function plainTextFromMarkdown(content: string) {
     .trim();
 }
 
+function ExpandIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+      <path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+      <path d="m3 8 6-6M21 8l-6-6M3 16l6 6M21 16l-6 6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function CollapseIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+      <path d="m9 3-6 6M15 3l6 6M9 21l-6-6M15 21l6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+      <path d="M3 3v5h5M21 3v5h-5M3 21v-5h5M21 21v-5h-5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+      <path d="m21 3-7.5 18-3.8-7.7L3 9.5 21 3Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" />
+      <path d="m9.6 13.3 4-4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 function makeMessageId(role: StoryChatMessage["role"]) {
   return `${role}-${crypto.randomUUID()}`;
 }
@@ -351,7 +378,7 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
       }
 
       if (!completedAnswer) {
-        throw new Error("DeepSeek 未返回完整回答，请稍后重试。");
+        throw new Error("AI 服务未返回完整回答，请稍后重试。");
       }
 
       completedAnswerRef.current = completedAnswer;
@@ -412,11 +439,11 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
               placeholder="向 AI 追问这条新闻…"
               value={draft}
             />
-            <button className={styles.compactSubmitButton} disabled={isSubmitting || !draft.trim()} type="submit">
-              {isSubmitting ? "回答中" : "发送"}
+            <button aria-label={isSubmitting ? "AI 正在回答" : "发送问题"} className={`${styles.compactSubmitButton} ${styles.iconButton}`} disabled={isSubmitting || !draft.trim()} title={isSubmitting ? "AI 正在回答" : "发送问题"} type="submit">
+              <SendIcon />
             </button>
-            <button className={styles.expandButton} disabled={isSubmitting} onClick={openDialog} type="button">
-              展开
+            <button aria-label="展开完整对话" className={`${styles.expandButton} ${styles.iconButton}`} disabled={isSubmitting} onClick={openDialog} title="展开完整对话" type="button">
+              <ExpandIcon />
             </button>
           </form>
           {error ? (
@@ -437,8 +464,8 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
                   围绕这条新闻继续问
                 </h2>
               </div>
-              <button className={styles.collapseButton} disabled={isSubmitting} onClick={closeDialog} type="button">
-                收起
+              <button aria-label="收起完整对话" className={`${styles.collapseButton} ${styles.iconButton}`} disabled={isSubmitting} onClick={closeDialog} title="收起完整对话" type="button">
+                <CollapseIcon />
               </button>
             </header>
 
@@ -502,8 +529,8 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
                 <p className={styles.hint} id={hintId}>
                   最近 8 条对话仅在本页上下文中使用。
                 </p>
-                <button className={styles.submitButton} disabled={isSubmitting || !draft.trim()} type="submit">
-                  {isSubmitting ? "正在回答" : "发送"}
+                <button aria-label={isSubmitting ? "AI 正在回答" : "发送问题"} className={`${styles.submitButton} ${styles.iconButton}`} disabled={isSubmitting || !draft.trim()} title={isSubmitting ? "AI 正在回答" : "发送问题"} type="submit">
+                  <SendIcon />
                 </button>
               </div>
               {error ? (

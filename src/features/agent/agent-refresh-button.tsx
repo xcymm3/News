@@ -9,7 +9,7 @@ export function AgentRefreshButton() {
   const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
   const [isRefreshing, startTransition] = useTransition();
-  const [message, setMessage] = useState("测试模式：点击后才会调用 DeepSeek 与联网检索工具。");
+  const [message, setMessage] = useState("测试模式：点击后才会调用 AI 服务与联网检索工具。");
   const [error, setError] = useState<string | null>(null);
 
   const runAgent = async () => {

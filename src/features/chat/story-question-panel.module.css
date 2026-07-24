@@ -139,6 +139,19 @@
   padding-inline: var(--space-sm);
 }
 
+.compactSubmitButton.iconButton,
+.submitButton.iconButton,
+.expandButton.iconButton,
+.collapseButton.iconButton {
+  inline-size: 2.75rem;
+  padding: 0;
+}
+
+.iconButton svg {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
 .expandButton,
 .collapseButton,
 .previewExpandButton {
