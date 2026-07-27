@@ -779,7 +779,6 @@ async function runUncachedAgentDigest(digestDate: string): Promise<AgentRunResul
   ];
   const summaryResponse = await callDeepSeek(config, {
     messages: finalMessages,
-    response_format: { type: "json_object" },
   });
   const digest = buildAgentDigestFromOutput({
     digestDate,
