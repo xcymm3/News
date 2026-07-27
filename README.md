@@ -109,7 +109,7 @@ GET /api/news-source/processed
 
 已定义全网搜索的统一输入、结果和来源准入契约，位于 `src/features/web-search/web-search-contract.ts`。候选网页会统一为标题、摘要、规范 URL、来源域名、发布时间和 `zh-CN` 语言标记；追踪参数会被移除，非 HTTP(S)、本地地址、排除域名或不在允许域名列表内的结果会被拒绝。
 
-本阶段不会调用搜索 API，也不会替换 RSS 正式链路。下一阶段将基于该契约实现具体供应商适配器，并将其作为 LangChain 的 `search_web` 工具。设置 `WEB_SEARCH_PROVIDER` 前需同时设置 `WEB_SEARCH_API_KEY`；否则配置校验会明确失败。
+第二阶段已安装 LangChain，并提供 `search_web` 与 `fetch_article` 两个服务端工具；Agent 每次运行最多调用 6 次工具。`search_web` 的首个实际适配器为 Tavily：设置 `WEB_SEARCH_PROVIDER="tavily"` 和 `WEB_SEARCH_API_KEY` 后才会请求其 API。`fetch_article` 只读取来源规则允许的 HTTP(S) 网页，移除脚本与样式内容，并限制返回正文长度。API 未配置时会返回明确的“尚未配置全网搜索 API”错误；当前 RSS 正式链路仍未替换。
 
 ## 当前目录
 

@@ -128,6 +128,19 @@ function normalizeCanonicalUrl(value: string) {
   }
 }
 
+export function normalizeWebArticleUrl(value: string, policy: WebSourcePolicy) {
+  const url = normalizeCanonicalUrl(value);
+
+  if (!url || !isAllowedWebSource(url.hostname, policy)) {
+    return null;
+  }
+
+  return {
+    canonicalUrl: url.toString(),
+    sourceDomain: url.hostname.toLowerCase(),
+  };
+}
+
 function normalizePublishedAt(value: string | null | undefined) {
   if (!value) {
     return null;
@@ -145,19 +158,19 @@ export function normalizeWebSearchCandidate(
   policy: WebSourcePolicy,
 ): WebSearchCandidate | null {
   const title = candidate.title.trim().replace(/\s+/g, " ");
-  const url = normalizeCanonicalUrl(candidate.canonicalUrl);
+  const normalizedUrl = normalizeWebArticleUrl(candidate.canonicalUrl, policy);
 
-  if (!title || !url || !isAllowedWebSource(url.hostname, policy)) {
+  if (!title || !normalizedUrl) {
     return null;
   }
 
   return {
-    id: candidate.id.trim() || url.toString(),
+    id: candidate.id.trim() || normalizedUrl.canonicalUrl,
     title,
     snippet: candidate.snippet?.trim().replace(/\s+/g, " ").slice(0, 1_500) || null,
-    canonicalUrl: url.toString(),
-    sourceName: candidate.sourceName.trim() || url.hostname,
-    sourceDomain: url.hostname.toLowerCase(),
+    canonicalUrl: normalizedUrl.canonicalUrl,
+    sourceName: candidate.sourceName.trim() || normalizedUrl.sourceDomain,
+    sourceDomain: normalizedUrl.sourceDomain,
     language: "zh-CN",
     publishedAt: normalizePublishedAt(candidate.publishedAt),
   };
