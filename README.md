@@ -111,6 +111,8 @@ GET /api/news-source/processed
 
 第二阶段已安装 LangChain，并提供 `search_web` 与 `fetch_article` 两个服务端工具；Agent 每次运行最多调用 6 次工具。`search_web` 的首个实际适配器为 Tavily：设置 `WEB_SEARCH_PROVIDER="tavily"` 和 `WEB_SEARCH_API_KEY` 后才会请求其 API。`fetch_article` 只读取来源规则允许的 HTTP(S) 网页，移除脚本与样式内容，并限制返回正文长度。API 未配置时会返回明确的“尚未配置全网搜索 API”错误；当前 RSS 正式链路仍未替换。
 
+第三阶段的 `web-search-digest-agent.ts` 会将 LangChain 工具记录转换为日报：模型只能引用同一轮中被 `fetch_article` 实际读取的网页，服务端会重新绑定链接并执行现有引用校验。通过校验后，可使用 `generateAndPublishWebSearchDigest` 写入 Neon。手动按钮和定时任务将在下一阶段切换到这条链路。
+
 ## 当前目录
 
 ```text
