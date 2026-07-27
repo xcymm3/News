@@ -65,6 +65,10 @@ pnpm db:deploy
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` | 兼容的模型配置项 | 否 |
 | `NEWS_SOURCE_API_KEY` | 需要密钥的新闻来源预留配置 | 否 |
 | `NEWS_SOURCE_PROVIDER` | 原始新闻来源（默认 `multi-rss-zh`，可选 `un-news-rss`、`gdelt-doc`） | 否 |
+| `WEB_SEARCH_PROVIDER` | 全网搜索供应商标识（`tavily`、`brave`、`serper` 或 `custom`） | 否 |
+| `WEB_SEARCH_API_KEY` | 全网搜索 API 密钥 | 否 |
+| `WEB_SEARCH_BASE_URL` | 自定义搜索供应商的 HTTPS 地址 | 否 |
+| `WEB_SEARCH_ALLOWED_DOMAINS` / `WEB_SEARCH_EXCLUDED_DOMAINS` | 逗号分隔的来源域名后缀准入/排除规则 | 否 |
 | `SESSION_SECRET` | 匿名会话签名密钥 | 否 |
 | `SENTRY_DSN` | 错误监控配置 | 否 |
 
@@ -100,6 +104,12 @@ GET /api/news-source/processed
 在 `.env.local` 填入 `DEEPSEEK_API_KEY` 后，首页会出现“运行 Agent”按钮。按钮触发后，DeepSeek Agent 会通过 `search_current_news` 工具读取当前 RSS 聚合结果；工具返回的标题、摘要、原文链接和文章 ID 再交给 DeepSeek 做整合、评分与中文摘要。模型只能返回这些文章 ID 作为引用；服务端会重新绑定原文并执行日报引用校验，未通过时不会替换现有日报。
 
 为避免误触发额度，Agent 不会在页面加载时自动运行；同一服务进程会复用 30 分钟内的成功结果。当前 RAG 检索范围是配置的 RSS 新闻源，不是无边界全网搜索。
+
+## 全网搜索 Agent（第一阶段）
+
+已定义全网搜索的统一输入、结果和来源准入契约，位于 `src/features/web-search/web-search-contract.ts`。候选网页会统一为标题、摘要、规范 URL、来源域名、发布时间和 `zh-CN` 语言标记；追踪参数会被移除，非 HTTP(S)、本地地址、排除域名或不在允许域名列表内的结果会被拒绝。
+
+本阶段不会调用搜索 API，也不会替换 RSS 正式链路。下一阶段将基于该契约实现具体供应商适配器，并将其作为 LangChain 的 `search_web` 工具。设置 `WEB_SEARCH_PROVIDER` 前需同时设置 `WEB_SEARCH_API_KEY`；否则配置校验会明确失败。
 
 ## 当前目录
 
