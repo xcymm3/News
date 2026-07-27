@@ -1,9 +1,11 @@
-import { NewsAgentError, runAgentDigest } from "@/features/agent/news-rag-agent";
+import {
+  generateAndPublishWebSearchDigest,
+  WebSearchDigestAgentError,
+} from "@/features/agent/web-search-digest-agent";
 import { formatShanghaiDate } from "@/features/digest/digest-service";
 import {
   DigestPersistenceError,
   prismaDigestRepository,
-  publishDigest,
   recordFailedAgentRun,
 } from "@/features/digest/prisma-digest-repository";
 
@@ -55,22 +57,17 @@ export async function GET(request: Request) {
       });
     }
 
-    const result = await runAgentDigest(digestDate);
-    const digest = await publishDigest(result.digest, {
-      trigger: "cron",
-      model: result.provider,
-      retrievedDocumentCount: result.retrievedDocumentCount,
-    });
+    const result = await generateAndPublishWebSearchDigest(digestDate, "cron");
 
     return noStoreJson({
       data: {
-        digest,
+        digest: result.digest,
         skipped: false,
       },
       meta: {
-        provider: result.provider,
+        model: result.model,
+        searchProvider: result.searchProvider,
         retrievedDocumentCount: result.retrievedDocumentCount,
-        cacheStatus: result.cacheStatus,
       },
     });
   } catch (error) {
@@ -91,17 +88,17 @@ export async function GET(request: Request) {
     return noStoreJson(
       {
         error: {
-          code: error instanceof NewsAgentError
+          code: error instanceof WebSearchDigestAgentError
             ? error.code
             : error instanceof DigestPersistenceError
               ? "DIGEST_PERSISTENCE_FAILED"
               : "AI_AGENT_UNAVAILABLE",
-          message: error instanceof NewsAgentError || error instanceof DigestPersistenceError
+          message: error instanceof WebSearchDigestAgentError || error instanceof DigestPersistenceError
             ? error.message
             : "定时 Agent 暂时不可用，请稍后重试。",
         },
       },
-      error instanceof NewsAgentError ? error.status : error instanceof DigestPersistenceError ? 503 : 502,
+      error instanceof WebSearchDigestAgentError ? error.status : error instanceof DigestPersistenceError ? 503 : 502,
     );
   }
 }

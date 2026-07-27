@@ -5,7 +5,11 @@ import { ChatOpenAI } from "@langchain/openai";
 import { validateGeneratedDigest } from "@/features/digest/live-digest-generator";
 import { publishDigest } from "@/features/digest/prisma-digest-repository";
 import type { DailyDigest, DigestCitation, DigestStory } from "@/features/digest/types";
-import { getWebSearchConfig, type WebSearchCandidate } from "@/features/web-search/web-search-contract";
+import {
+  getWebSearchConfig,
+  WebSearchConfigurationError,
+  type WebSearchCandidate,
+} from "@/features/web-search/web-search-contract";
 import { WebSearchProviderError } from "@/features/web-search/tavily-web-search-provider";
 
 import { createWebResearchAgent } from "./web-research-agent";
@@ -331,7 +335,18 @@ function createDigestPrompt(digestDate: string) {
 }
 
 export async function runWebSearchDigest(digestDate: string): Promise<WebSearchDigestRunResult> {
-  const searchConfig = getWebSearchConfig();
+  let searchConfig;
+
+  try {
+    searchConfig = getWebSearchConfig();
+  } catch (error) {
+    if (error instanceof WebSearchConfigurationError) {
+      throw new WebSearchDigestAgentError("WEB_RESEARCH_NOT_CONFIGURED", 503, error.message);
+    }
+
+    throw error;
+  }
+
   if (!searchConfig) {
     throw new WebSearchDigestAgentError(
       "WEB_RESEARCH_NOT_CONFIGURED",

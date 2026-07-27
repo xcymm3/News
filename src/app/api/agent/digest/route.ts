@@ -1,28 +1,32 @@
-import { NewsAgentError, runAgentDigest } from "@/features/agent/news-rag-agent";
+import {
+  generateAndPublishWebSearchDigest,
+  WebSearchDigestAgentError,
+} from "@/features/agent/web-search-digest-agent";
 import { formatShanghaiDate } from "@/features/digest/digest-service";
-import { DigestPersistenceError, publishDigest } from "@/features/digest/prisma-digest-repository";
+import {
+  DigestPersistenceError,
+  recordFailedAgentRun,
+} from "@/features/digest/prisma-digest-repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 270;
 
 export async function POST() {
+  const digestDate = formatShanghaiDate(new Date());
+
   try {
-    const result = await runAgentDigest(formatShanghaiDate(new Date()));
-    const digest = await publishDigest(result.digest, {
-      trigger: "manual",
-      model: result.provider,
-      retrievedDocumentCount: result.retrievedDocumentCount,
-    });
+    const result = await generateAndPublishWebSearchDigest(digestDate, "manual");
 
     return Response.json(
       {
         data: {
-          digest,
+          digest: result.digest,
         },
         meta: {
-          provider: result.provider,
+          model: result.model,
+          searchProvider: result.searchProvider,
           retrievedDocumentCount: result.retrievedDocumentCount,
-          cacheStatus: result.cacheStatus,
           generationMode: "agent",
         },
       },
@@ -33,6 +37,18 @@ export async function POST() {
       },
     );
   } catch (error) {
+    const message = error instanceof Error ? error.message : "全网研究 Agent 运行失败。";
+
+    try {
+      await recordFailedAgentRun({
+        trigger: "manual",
+        digestDate,
+        errorMessage: message,
+      });
+    } catch (recordError) {
+      console.error("Failed to record a manual Agent error.", recordError);
+    }
+
     if (error instanceof DigestPersistenceError) {
       return Response.json(
         {
@@ -50,7 +66,7 @@ export async function POST() {
       );
     }
 
-    if (error instanceof NewsAgentError) {
+    if (error instanceof WebSearchDigestAgentError) {
       return Response.json(
         {
           error: {
@@ -67,13 +83,13 @@ export async function POST() {
       );
     }
 
-    console.error("Failed to run the news RAG agent.", error);
+    console.error("Failed to run the LangChain web research agent.", error);
 
     return Response.json(
       {
         error: {
-          code: "AI_AGENT_UNAVAILABLE",
-          message: "AI Agent 暂时不可用，请稍后重试。",
+          code: "WEB_RESEARCH_UNAVAILABLE",
+          message: "全网研究 Agent 暂时不可用，请稍后重试。",
         },
       },
       {

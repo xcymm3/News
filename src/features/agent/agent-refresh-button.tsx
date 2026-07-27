@@ -9,7 +9,7 @@ export function AgentRefreshButton() {
   const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
   const [isRefreshing, startTransition] = useTransition();
-  const [message, setMessage] = useState("测试模式：点击后才会调用 AI 服务与联网检索工具。");
+  const [message, setMessage] = useState("测试模式：点击后才会调用 LangChain Agent、全网搜索与原文阅读工具。");
   const [error, setError] = useState<string | null>(null);
 
   const runAgent = async () => {
@@ -19,7 +19,7 @@ export function AgentRefreshButton() {
 
     setError(null);
     setIsRunning(true);
-    setMessage("Agent 正在联网检索、整理并校验引用…");
+    setMessage("Agent 正在全网检索、阅读原文并校验引用…");
 
     try {
       const response = await fetch("/api/agent/digest", {
@@ -27,23 +27,24 @@ export function AgentRefreshButton() {
       });
       const payload = (await response.json()) as {
         data?: { digest?: { stories?: unknown[] } };
-        meta?: { cacheStatus?: "hit" | "miss"; retrievedDocumentCount?: number };
+        meta?: { searchProvider?: string; retrievedDocumentCount?: number };
         error?: { message?: string };
       };
 
       if (!response.ok || !payload.data?.digest) {
-        throw new Error(payload.error?.message ?? "AI Agent 暂时无法生成日报，请稍后重试。");
+        throw new Error(payload.error?.message ?? "全网研究 Agent 暂时无法生成日报，请稍后重试。");
       }
 
       const storyCount = payload.data.digest.stories?.length ?? 0;
-      const cacheLabel = payload.meta?.cacheStatus === "hit" ? "复用了 30 分钟内的结果" : "已完成一次新的联网检索";
+      const providerLabel = payload.meta?.searchProvider ? `使用 ${payload.meta.searchProvider} 全网检索` : "已完成一次全网检索";
+      const sourceCount = payload.meta?.retrievedDocumentCount ?? 0;
 
-      setMessage(`${cacheLabel}：生成 ${storyCount} 条带出处的 AI Agent 候选。`);
+      setMessage(`${providerLabel}，阅读 ${sourceCount} 篇原文：生成 ${storyCount} 条带出处的日报。`);
       startTransition(() => {
         router.refresh();
       });
     } catch (caughtError) {
-      const nextError = caughtError instanceof Error ? caughtError.message : "AI Agent 暂时无法生成日报，请稍后重试。";
+      const nextError = caughtError instanceof Error ? caughtError.message : "全网研究 Agent 暂时无法生成日报，请稍后重试。";
 
       setError(nextError);
       setMessage("当前页面未被替换；可检查配置后再次尝试。");
