@@ -27,6 +27,13 @@ type RecordFailedAgentRunOptions = {
   errorMessage: string;
 };
 
+export class DigestPersistenceError extends Error {
+  constructor() {
+    super("日报已生成，但保存到数据库时失败。请稍后重试。");
+    this.name = "DigestPersistenceError";
+  }
+}
+
 function digestDateToDatabaseDate(digestDate: string) {
   return new Date(`${digestDate}T00:00:00.000Z`);
 }
@@ -209,7 +216,8 @@ export async function publishDigest(digest: DailyDigest, options: PublishDigestO
   const prisma = getPrismaClient();
   const databaseDate = digestDateToDatabaseDate(digest.digestDate);
 
-  await prisma.$transaction(async (transaction) => {
+  try {
+    await prisma.$transaction(async (transaction) => {
     const latest = await transaction.digest.findFirst({
       where: { digestDate: databaseDate },
       orderBy: { revision: "desc" },
@@ -300,7 +308,14 @@ export async function publishDigest(digest: DailyDigest, options: PublishDigestO
         completedAt: new Date(),
       },
     });
-  });
+    }, {
+      maxWait: 10_000,
+      timeout: 30_000,
+    });
+  } catch (error) {
+    console.error("Failed to persist the generated digest.", error);
+    throw new DigestPersistenceError();
+  }
 
   const persistedDigest = await prismaDigestRepository.findPublishedByDate(digest.digestDate);
   if (!persistedDigest) {

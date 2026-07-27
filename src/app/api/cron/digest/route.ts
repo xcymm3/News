@@ -1,6 +1,7 @@
 import { NewsAgentError, runAgentDigest } from "@/features/agent/news-rag-agent";
 import { formatShanghaiDate } from "@/features/digest/digest-service";
 import {
+  DigestPersistenceError,
   prismaDigestRepository,
   publishDigest,
   recordFailedAgentRun,
@@ -90,11 +91,17 @@ export async function GET(request: Request) {
     return noStoreJson(
       {
         error: {
-          code: error instanceof NewsAgentError ? error.code : "AI_AGENT_UNAVAILABLE",
-          message: error instanceof NewsAgentError ? error.message : "定时 Agent 暂时不可用，请稍后重试。",
+          code: error instanceof NewsAgentError
+            ? error.code
+            : error instanceof DigestPersistenceError
+              ? "DIGEST_PERSISTENCE_FAILED"
+              : "AI_AGENT_UNAVAILABLE",
+          message: error instanceof NewsAgentError || error instanceof DigestPersistenceError
+            ? error.message
+            : "定时 Agent 暂时不可用，请稍后重试。",
         },
       },
-      error instanceof NewsAgentError ? error.status : 502,
+      error instanceof NewsAgentError ? error.status : error instanceof DigestPersistenceError ? 503 : 502,
     );
   }
 }

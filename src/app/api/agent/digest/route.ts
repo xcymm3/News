@@ -1,6 +1,6 @@
 import { NewsAgentError, runAgentDigest } from "@/features/agent/news-rag-agent";
 import { formatShanghaiDate } from "@/features/digest/digest-service";
-import { publishDigest } from "@/features/digest/prisma-digest-repository";
+import { DigestPersistenceError, publishDigest } from "@/features/digest/prisma-digest-repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +33,23 @@ export async function POST() {
       },
     );
   } catch (error) {
+    if (error instanceof DigestPersistenceError) {
+      return Response.json(
+        {
+          error: {
+            code: "DIGEST_PERSISTENCE_FAILED",
+            message: error.message,
+          },
+        },
+        {
+          status: 503,
+          headers: {
+            "Cache-Control": "no-store",
+          },
+        },
+      );
+    }
+
     if (error instanceof NewsAgentError) {
       return Response.json(
         {
