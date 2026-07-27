@@ -20,6 +20,13 @@ type PublishDigestOptions = {
   retrievedDocumentCount?: number;
 };
 
+type RecordFailedAgentRunOptions = {
+  trigger: "manual" | "cron";
+  digestDate: string;
+  model?: string;
+  errorMessage: string;
+};
+
 function digestDateToDatabaseDate(digestDate: string) {
   return new Date(`${digestDate}T00:00:00.000Z`);
 }
@@ -301,4 +308,17 @@ export async function publishDigest(digest: DailyDigest, options: PublishDigestO
   }
 
   return persistedDigest;
+}
+
+export async function recordFailedAgentRun(options: RecordFailedAgentRunOptions) {
+  await getPrismaClient().agentRun.create({
+    data: {
+      digestDate: digestDateToDatabaseDate(options.digestDate),
+      trigger: options.trigger === "cron" ? AgentRunTrigger.CRON : AgentRunTrigger.MANUAL,
+      status: AgentRunStatus.FAILED,
+      model: options.model,
+      errorMessage: options.errorMessage.slice(0, 2_000),
+      completedAt: new Date(),
+    },
+  });
 }

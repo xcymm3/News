@@ -80,6 +80,10 @@ pnpm db:deploy
 
 该命令会创建日报、新闻来源、引用和 Agent 运行记录所需的表。不要提交 `.env` 或连接串。
 
+### 自动日报
+
+生产环境由 Vercel Cron 每天 UTC `00:10`（北京时间 `08:10`）调用 `/api/cron/digest`。在 Vercel 的 Production 环境中设置 `CRON_SECRET`，并同时设置 `DATABASE_URL` 和 AI 服务环境变量；接口只接受 `Authorization: Bearer <CRON_SECRET>` 的请求。当天已有已发布日报时，定时任务会安全跳过，首页继续读取数据库中的已发布版本。手动“运行 Agent”按钮仍会保留，并会发布一个新的日报版本用于测试。
+
 ## 实时新闻输入
 
 默认实时输入是 7 个中文 RSS：中新网滚动与国内、新华网国际、央视网国内、36 氪综合与快讯、中央社国际。服务端会并行读取它们；单个源暂时失败不会中断聚合，只有所有源均无可用条目时才会失败。也可将 `NEWS_SOURCE_PROVIDER` 设为 `un-news-rss` 使用单一 UN News，或设为 `gdelt-doc` 使用 GDELT DOC：
