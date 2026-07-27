@@ -7,6 +7,12 @@ import {
   DigestPersistenceError,
   recordFailedAgentRun,
 } from "@/features/digest/prisma-digest-repository";
+import {
+  canRunWebSearch,
+  getWebSearchRollout,
+  getWebSearchRolloutMessage,
+  WebSearchRolloutError,
+} from "@/features/web-search/web-search-rollout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +22,22 @@ export async function POST() {
   const digestDate = formatShanghaiDate(new Date());
 
   try {
+    const rollout = getWebSearchRollout();
+    if (!canRunWebSearch(rollout, "manual")) {
+      return Response.json(
+        {
+          error: {
+            code: "WEB_SEARCH_ROLLOUT_DISABLED",
+            message: getWebSearchRolloutMessage(rollout, "manual"),
+          },
+        },
+        {
+          status: 503,
+          headers: { "Cache-Control": "no-store" },
+        },
+      );
+    }
+
     const result = await generateAndPublishWebSearchDigest(digestDate, "manual");
 
     return Response.json(
@@ -26,6 +48,7 @@ export async function POST() {
         meta: {
           model: result.model,
           searchProvider: result.searchProvider,
+          rollout,
           retrievedDocumentCount: result.retrievedDocumentCount,
           generationMode: "agent",
         },
@@ -37,6 +60,21 @@ export async function POST() {
       },
     );
   } catch (error) {
+    if (error instanceof WebSearchRolloutError) {
+      return Response.json(
+        {
+          error: {
+            code: "WEB_SEARCH_ROLLOUT_INVALID",
+            message: error.message,
+          },
+        },
+        {
+          status: 503,
+          headers: { "Cache-Control": "no-store" },
+        },
+      );
+    }
+
     const message = error instanceof Error ? error.message : "全网研究 Agent 运行失败。";
 
     try {

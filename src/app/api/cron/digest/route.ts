@@ -8,6 +8,12 @@ import {
   prismaDigestRepository,
   recordFailedAgentRun,
 } from "@/features/digest/prisma-digest-repository";
+import {
+  canRunWebSearch,
+  getWebSearchRollout,
+  getWebSearchRolloutMessage,
+  WebSearchRolloutError,
+} from "@/features/web-search/web-search-rollout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +50,19 @@ export async function GET(request: Request) {
   const digestDate = formatShanghaiDate(new Date());
 
   try {
+    const rollout = getWebSearchRollout();
+    if (!canRunWebSearch(rollout, "cron")) {
+      return noStoreJson({
+        data: {
+          skipped: true,
+        },
+        meta: {
+          rollout,
+          reason: getWebSearchRolloutMessage(rollout, "cron"),
+        },
+      });
+    }
+
     const existingDigest = await prismaDigestRepository.findPublishedByDate(digestDate);
     if (existingDigest) {
       return noStoreJson({
@@ -67,10 +86,23 @@ export async function GET(request: Request) {
       meta: {
         model: result.model,
         searchProvider: result.searchProvider,
+        rollout,
         retrievedDocumentCount: result.retrievedDocumentCount,
       },
     });
   } catch (error) {
+    if (error instanceof WebSearchRolloutError) {
+      return noStoreJson(
+        {
+          error: {
+            code: "WEB_SEARCH_ROLLOUT_INVALID",
+            message: error.message,
+          },
+        },
+        503,
+      );
+    }
+
     const message = getErrorMessage(error);
 
     try {

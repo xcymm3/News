@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "test": "vitest run",
+    "test:web-search-eval": "vitest run src/features/agent/web-search-evaluation.test.ts",
     "test:watch": "vitest",
     "build": "prisma generate && next build",
     "start": "next start",

@@ -115,6 +115,12 @@ GET /api/news-source/processed
 
 手动“运行 Agent”按钮和 Vercel Cron 已在第四阶段切换到全网搜索链路；单次运行最长 270 秒，失败会记录为 Agent 运行记录并返回区分配置、搜索、模型、引用校验和数据库发布的错误。必须在本地与 Vercel 同时设置 `WEB_SEARCH_PROVIDER="tavily"` 和 `WEB_SEARCH_API_KEY`，否则按钮会明确提示尚未配置全网搜索 API。RSS 相关 API 仍可单独用于检查旧来源，但不再生成或发布首页日报。
 
+### 全网搜索渐进上线与评测
+
+`WEB_SEARCH_ROLLOUT` 用于控制费用与风险：`disabled` 完全关闭，`manual`（默认）只允许页面按钮测试，`full` 才允许 Vercel Cron 自动运行。建议先在本地和 Vercel Preview 使用 `manual`，检查来源链接、阅读正文数量与 Agent 运行记录，再在 Production 将其改为 `full`。
+
+评测集位于 `src/features/agent/web-search-evaluation.ts`，包含政策、跨境贸易、科技产业、国际关系与平台监管等查询场景。评测会检查条目数、引用数量、来源域名多样性、未被支持的条目以及查询关键词覆盖；执行 `pnpm test:web-search-eval` 可单独运行。它不会调用搜索 API 或模型，真实 API 验证应在手动测试阶段完成。
+
 ## 当前目录
 
 ```text
