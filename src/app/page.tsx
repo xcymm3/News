@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { AgentRefreshButton } from "@/features/agent/agent-refresh-button";
-import { digestService } from "@/features/digest/digest-service";
+import { DigestNotFoundError, digestService } from "@/features/digest/digest-service";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,42 @@ function formatDate(isoDate: string) {
 }
 
 export default async function Home() {
-  const digest = await digestService.getTodayDigest();
+  let digest;
+
+  try {
+    digest = await digestService.getTodayDigest();
+  } catch (error) {
+    const isMissingDigest = error instanceof DigestNotFoundError;
+
+    return (
+      <div className={styles.page}>
+        <div className={styles.shell}>
+          <header className={styles.masthead}>
+            <div className={styles.mastMeta}>
+              <span>全球简报</span>
+              <span>数据库日报</span>
+              <span>今日</span>
+            </div>
+            <h1 className={styles.wordmark}>今日国际局势</h1>
+            <p className={styles.strapline}>全球动向 · 每日更新 · 等待发布</p>
+          </header>
+
+          <AgentRefreshButton />
+
+          <main className={styles.unavailable} id="main-content">
+            <p className={styles.unavailableEyebrow}>日报暂不可用</p>
+            <h2 className={styles.unavailableTitle}>{isMissingDigest ? "今日日报尚未生成" : "暂时无法读取数据库日报"}</h2>
+            <p className={styles.unavailableText}>
+              {isMissingDigest
+                ? "请使用上方“运行 Agent”生成今天的首个日报。"
+                : "请稍后刷新页面；若问题持续，请检查数据库连接配置。"}
+            </p>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   const digestLabel = digest.isDemoData ? "演示数据" : digest.generationMode === "agent" ? "AI Agent 整理" : "自动整理候选";
 
   return (

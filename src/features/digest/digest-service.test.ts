@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createFallbackDigestRepository, type DigestRepository } from "./digest-service";
+import { createDigestService, DigestNotFoundError, type DigestRepository } from "./digest-service";
 import type { DailyDigest } from "./types";
 
 const fallbackDigest: DailyDigest = {
@@ -12,24 +12,24 @@ const fallbackDigest: DailyDigest = {
   stories: [],
 };
 
-describe("createFallbackDigestRepository", () => {
-  it("uses the demo repository when live generation fails", async () => {
-    const primaryRepository: DigestRepository = {
-      async findPublishedByDate() {
-        throw new Error("source unavailable");
-      },
-    };
-    const fallbackRepository: DigestRepository = {
+describe("createDigestService", () => {
+  it("returns only the published digest supplied by its repository", async () => {
+    const repository: DigestRepository = {
       async findPublishedByDate() {
         return fallbackDigest;
       },
     };
-    const reportedErrors: unknown[] = [];
-    const repository = createFallbackDigestRepository(primaryRepository, fallbackRepository, (error) => {
-      reportedErrors.push(error);
-    });
 
-    await expect(repository.findPublishedByDate("2026-07-23")).resolves.toEqual(fallbackDigest);
-    expect(reportedErrors).toHaveLength(1);
+    await expect(createDigestService(repository).getDigestByDate("2026-07-23")).resolves.toEqual(fallbackDigest);
+  });
+
+  it("reports a missing digest instead of falling back to generated content", async () => {
+    const repository: DigestRepository = {
+      async findPublishedByDate() {
+        return null;
+      },
+    };
+
+    await expect(createDigestService(repository).getDigestByDate("2026-07-23")).rejects.toBeInstanceOf(DigestNotFoundError);
   });
 });

@@ -136,6 +136,35 @@
   opacity: 0.65;
 }
 
+.unavailable {
+  padding-block: var(--space-xl);
+  border-block-end: var(--rule-hair) solid var(--color-rule-strong);
+}
+
+.unavailableEyebrow,
+.unavailableText {
+  margin: 0;
+  color: var(--color-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.unavailableEyebrow {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+}
+
+.unavailableTitle {
+  margin: var(--space-xs) 0;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: 1.2;
+}
+
 .feedHeader {
   display: flex;
   align-items: baseline;

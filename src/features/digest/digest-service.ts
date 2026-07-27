@@ -1,7 +1,4 @@
-import { demoDigest } from "./data/demo-digest";
 import { prismaDigestRepository } from "./prisma-digest-repository";
-import { getCachedAgentDigest } from "@/features/agent/news-rag-agent";
-import { generateLiveDigest } from "./live-digest-generator";
 import type { DailyDigest } from "./types";
 
 const ASIA_SHANGHAI_TIME_ZONE = "Asia/Shanghai";
@@ -64,80 +61,6 @@ export function formatShanghaiDate(now: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function replaceIsoDate(isoDateTime: string, digestDate: string) {
-  return `${digestDate}${isoDateTime.slice(10)}`;
-}
-
-function cloneDemoDigestForDate(digestDate: string): DailyDigest {
-  return {
-    ...demoDigest,
-    id: `demo-digest-${digestDate}-r${demoDigest.revision}`,
-    digestDate,
-    publishedAt: replaceIsoDate(demoDigest.publishedAt, digestDate),
-    notice: `当前为 ${digestDate} 的虚构演示数据，不代表真实新闻或真实来源。`,
-    stories: demoDigest.stories.map((story) => ({
-      ...story,
-      updatedAt: replaceIsoDate(story.updatedAt, digestDate),
-      citations: story.citations.map((citation) => ({
-        ...citation,
-        publishedAt: replaceIsoDate(citation.publishedAt, digestDate),
-      })),
-    })),
-  };
-}
-
-export const demoDigestRepository: DigestRepository = {
-  async findPublishedByDate(digestDate) {
-    assertValidDigestDate(digestDate);
-    return cloneDemoDigestForDate(digestDate);
-  },
-};
-
-export const generatedDigestRepository: DigestRepository = {
-  async findPublishedByDate(digestDate) {
-    assertValidDigestDate(digestDate);
-
-    if (digestDate !== formatShanghaiDate(new Date())) {
-      return null;
-    }
-
-    const agentDigest = getCachedAgentDigest(digestDate);
-
-    if (agentDigest) {
-      return agentDigest;
-    }
-
-    return generateLiveDigest(digestDate);
-  },
-};
-
-export function createFallbackDigestRepository(
-  primaryRepository: DigestRepository,
-  fallbackRepository: DigestRepository,
-  reportError: (error: unknown) => void = (error) => {
-    console.warn("Falling back to the demo digest because live digest generation failed.", error);
-  },
-): DigestRepository {
-  return {
-    async findPublishedByDate(digestDate) {
-      try {
-        const generatedDigest = await primaryRepository.findPublishedByDate(digestDate);
-
-        if (generatedDigest) {
-          return generatedDigest;
-        }
-      } catch (error) {
-        reportError(error);
-      }
-
-      return fallbackRepository.findPublishedByDate(digestDate);
-    },
-  };
-}
-
-const generatedOrDemoDigestRepository = createFallbackDigestRepository(generatedDigestRepository, demoDigestRepository);
-const fallbackDigestRepository = createFallbackDigestRepository(prismaDigestRepository, generatedOrDemoDigestRepository);
-
 export function createDigestService(repository: DigestRepository): DigestService {
   const getDigestByDate = async (digestDate: string) => {
     assertValidDigestDate(digestDate);
@@ -159,4 +82,4 @@ export function createDigestService(repository: DigestRepository): DigestService
   };
 }
 
-export const digestService = createDigestService(fallbackDigestRepository);
+export const digestService = createDigestService(prismaDigestRepository);
