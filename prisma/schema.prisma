@@ -55,6 +55,17 @@ enum ChatMessageRole {
   SYSTEM
 }
 
+enum AgentRunTrigger {
+  MANUAL
+  CRON
+}
+
+enum AgentRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
 model NewsSource {
   id         String     @id @default(uuid())
   name       String
@@ -163,14 +174,36 @@ model Digest {
   digestDate  DateTime     @db.Date
   revision    Int
   status      DigestStatus @default(DRAFT)
+  generationMode String?
+  notice      String?
   publishedAt DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  items DigestItem[]
+  items     DigestItem[]
+  agentRuns AgentRun[]
 
   @@unique([digestDate, revision])
   @@index([digestDate, status])
+}
+
+model AgentRun {
+  id                     String          @id @default(uuid())
+  digestDate             DateTime        @db.Date
+  trigger                AgentRunTrigger
+  status                 AgentRunStatus  @default(RUNNING)
+  model                  String?
+  retrievedDocumentCount Int?
+  publishedStoryCount    Int?
+  errorMessage           String?
+  digestId               String?
+  startedAt              DateTime        @default(now())
+  completedAt            DateTime?
+
+  digest Digest? @relation(fields: [digestId], references: [id], onDelete: SetNull)
+
+  @@index([digestDate, status])
+  @@index([startedAt])
 }
 
 model DigestItem {

@@ -70,6 +70,16 @@ pnpm db:deploy
 
 只有以 `NEXT_PUBLIC_` 开头的变量才会被 Next.js 编译进浏览器代码。其他变量只能在服务端读取。
 
+### Neon PostgreSQL
+
+在 Neon 创建项目后，将控制台提供的 **pooled connection string** 填入本地 `.env` 与 Vercel 的 `DATABASE_URL`。连接串必须保留 `sslmode=require`。首次连接后运行：
+
+```powershell
+pnpm db:deploy
+```
+
+该命令会创建日报、新闻来源、引用和 Agent 运行记录所需的表。不要提交 `.env` 或连接串。
+
 ## 实时新闻输入
 
 默认实时输入是 7 个中文 RSS：中新网滚动与国内、新华网国际、央视网国内、36 氪综合与快讯、中央社国际。服务端会并行读取它们；单个源暂时失败不会中断聚合，只有所有源均无可用条目时才会失败。也可将 `NEWS_SOURCE_PROVIDER` 设为 `un-news-rss` 使用单一 UN News，或设为 `gdelt-doc` 使用 GDELT DOC：

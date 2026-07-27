@@ -1,4 +1,5 @@
 import { demoDigest } from "./data/demo-digest";
+import { prismaDigestRepository } from "./prisma-digest-repository";
 import { getCachedAgentDigest } from "@/features/agent/news-rag-agent";
 import { generateLiveDigest } from "./live-digest-generator";
 import type { DailyDigest } from "./types";
@@ -134,7 +135,8 @@ export function createFallbackDigestRepository(
   };
 }
 
-const fallbackDigestRepository = createFallbackDigestRepository(generatedDigestRepository, demoDigestRepository);
+const generatedOrDemoDigestRepository = createFallbackDigestRepository(generatedDigestRepository, demoDigestRepository);
+const fallbackDigestRepository = createFallbackDigestRepository(prismaDigestRepository, generatedOrDemoDigestRepository);
 
 export function createDigestService(repository: DigestRepository): DigestService {
   const getDigestByDate = async (digestDate: string) => {

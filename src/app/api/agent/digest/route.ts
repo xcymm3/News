@@ -1,5 +1,6 @@
 import { NewsAgentError, runAgentDigest } from "@/features/agent/news-rag-agent";
 import { formatShanghaiDate } from "@/features/digest/digest-service";
+import { publishDigest } from "@/features/digest/prisma-digest-repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,11 +8,16 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   try {
     const result = await runAgentDigest(formatShanghaiDate(new Date()));
+    const digest = await publishDigest(result.digest, {
+      trigger: "manual",
+      model: result.provider,
+      retrievedDocumentCount: result.retrievedDocumentCount,
+    });
 
     return Response.json(
       {
         data: {
-          digest: result.digest,
+          digest,
         },
         meta: {
           provider: result.provider,
