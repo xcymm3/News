@@ -97,12 +97,41 @@
 
 .bodyText {
   max-inline-size: 62ch;
-  margin: 0;
+  margin: 0 0 var(--space-md);
   color: var(--color-ink);
   font-family: var(--font-body);
   font-size: clamp(var(--text-base), 2.8vw, var(--text-md));
   line-height: 1.86;
   overflow-wrap: anywhere;
+}
+
+.bodyText:last-child {
+  margin-block-end: 0;
+}
+
+.summaryHeading {
+  max-inline-size: 62ch;
+  margin: var(--space-lg) 0 var(--space-xs);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: clamp(var(--text-lg), 4vw, var(--text-xl));
+  line-height: 1.25;
+}
+
+.summaryHeading:first-child {
+  margin-block-start: 0;
+}
+
+.summaryList {
+  max-inline-size: 62ch;
+  display: grid;
+  gap: var(--space-2xs);
+  margin: 0 0 var(--space-md);
+  padding-inline-start: 1.25em;
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: clamp(var(--text-base), 2.8vw, var(--text-md));
+  line-height: 1.76;
 }
 
 .sources {

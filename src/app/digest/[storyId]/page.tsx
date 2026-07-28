@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { StoryQuestionPanel } from "@/features/chat/story-question-panel";
 import { digestService } from "@/features/digest/digest-service";
@@ -26,6 +27,35 @@ function formatDate(isoDate: string) {
     day: "numeric",
     timeZone: "Asia/Shanghai",
   }).format(new Date(isoDate));
+}
+
+function renderInlineMarkdown(value: string): ReactNode[] {
+  return value.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((part, index) => (
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={index}>{part.slice(2, -2)}</strong>
+      : part
+  ));
+}
+
+function renderSummaryMarkdown(value: string) {
+  return value.trim().split(/\n{2,}/).filter(Boolean).map((block, index) => {
+    const lines = block.trim().split("\n").map((line) => line.trim()).filter(Boolean);
+    const heading = lines.length === 1 ? /^#{1,3}\s+(.+)$/.exec(lines[0]!) : null;
+
+    if (heading) {
+      return <h2 className={styles.summaryHeading} key={index}>{renderInlineMarkdown(heading[1]!)}</h2>;
+    }
+
+    if (lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line))) {
+      return (
+        <ul className={styles.summaryList} key={index}>
+          {lines.map((line, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(line.replace(/^[-*]\s+/, ""))}</li>)}
+        </ul>
+      );
+    }
+
+    return <p className={styles.bodyText} key={index}>{renderInlineMarkdown(lines.join(" "))}</p>;
+  });
 }
 
 export default async function StoryDetailPage({
@@ -71,7 +101,7 @@ export default async function StoryDetailPage({
           </header>
 
           <section className={styles.summary} aria-label="新闻摘要">
-            <p className={styles.bodyText}>{story.summary}</p>
+            {renderSummaryMarkdown(story.summary)}
           </section>
 
           <section className={styles.sources} aria-labelledby="story-sources-heading">

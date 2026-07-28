@@ -20,10 +20,10 @@ import { WebSearchProviderError } from "@/features/web-search/web-search-provide
 import { createWebResearchTools } from "@/features/web-search/web-research-tools";
 
 const MAX_WEB_AGENT_STORIES = 12;
-const MAX_DOCUMENT_CONTEXT_CHARACTERS = 2_400;
+const MAX_DOCUMENT_CONTEXT_CHARACTERS = 3_000;
 const MAX_RESULTS_PER_TOPIC = 20;
 const MAX_CANDIDATE_CLUSTERS = 18;
-const MINIMUM_SOURCE_DOMAINS_PER_EVENT = 3;
+const MINIMUM_SOURCE_DOMAINS_PER_EVENT = 2;
 const MAX_SOURCES_PER_EVENT = 5;
 const LLM_REQUEST_TIMEOUT_MS = 90_000;
 
@@ -144,7 +144,7 @@ function getConfiguredModel() {
       apiKey,
       model,
       temperature: 0.2,
-      maxTokens: 640,
+      maxTokens: 3_200,
       timeout: LLM_REQUEST_TIMEOUT_MS,
       maxRetries: 0,
       configuration: { baseURL: baseUrl },
@@ -287,8 +287,8 @@ export function buildWebSearchDigestFromOutput({
 
     const story = rawStory as WebDigestStoryOutput;
     const headline = getString(story.headline).slice(0, 180);
-    const summary = getString(story.summary).slice(0, 1_200);
-    const whyItMatters = getString(story.whyItMatters).slice(0, 800);
+    const summary = getString(story.summary).slice(0, 2_400);
+    const whyItMatters = getString(story.whyItMatters).slice(0, 1_000);
     const sources = getSourceUrls(story.sourceUrls)
       .flatMap((url) => {
         const source = sourcesByUrl.get(url);
@@ -409,7 +409,7 @@ export function collectRetrievedWebSources(messages: unknown[]): RetrievedWebSou
         sourceDomain: candidate.sourceDomain,
         title: candidate.title,
         publishedAt: candidate.publishedAt ?? (getString(content.fetchedAt) || new Date().toISOString()),
-        supportingExcerpt: text.slice(0, 600),
+        supportingExcerpt: text.slice(0, MAX_DOCUMENT_CONTEXT_CHARACTERS),
       });
     }
   }
@@ -425,7 +425,7 @@ function createDigestPrompt(digestDate: string, cluster: RetrievedEventCluster) 
     "Return exactly one story in a JSON object with a stories array.",
     "Return valid JSON only. Begin directly with { and never output analysis, explanations, Markdown fences, or <think> content.",
     "Each story must include headline, summary, whyItMatters, importanceScore (1-100), and sourceUrls (an array of fetched source URLs).",
-    "Write Chinese. Keep the summary to roughly 180-260 Chinese characters and whyItMatters to 40-70 Chinese characters.",
+    "Write Chinese. The summary should be roughly 1,600-2,000 Chinese characters when the evidence supports that detail, with 3-5 short Markdown paragraphs. You may use ### short section headings, - lists, and **bold** for key facts. Keep whyItMatters to 100-180 Chinese characters.",
     "Synthesize only facts confirmed across the supplied sources. If details differ, state the uncertainty briefly. Cite every supplied source URL exactly as given; do not invent or alter URLs.",
   ].join(" ");
 }
@@ -596,7 +596,7 @@ export async function runWebSearchDigest(digestDate: string): Promise<WebSearchD
       throw new WebSearchDigestAgentError(
         "WEB_RESEARCH_UNAVAILABLE",
         502,
-        "未找到至少由 3 个不同网站报道且可读取原文的国际事件。",
+        "未找到至少由 2 个不同网站报道且可读取原文的国际事件。",
       );
     }
 
