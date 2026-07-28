@@ -20,15 +20,6 @@ function formatDateTime(isoDate: string) {
   }).format(new Date(isoDate));
 }
 
-function formatDate(isoDate: string) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "Asia/Shanghai",
-  }).format(new Date(isoDate));
-}
-
 function renderInlineMarkdown(value: string): ReactNode[] {
   return value.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((part, index) => (
     part.startsWith("**") && part.endsWith("**")
@@ -95,14 +86,11 @@ export default async function StoryDetailPage({
   return (
     <div className={styles.page}>
       <main className={styles.shell}>
-        <header className={styles.utilityBar}>
+        <nav aria-label="详情页导航" className={styles.utilityBar}>
           <Link className={styles.backLink} href="/">
             返回标题列表
           </Link>
-          <p className={styles.issueLine}>
-            全球简报 · {formatDate(digest.publishedAt)} · Vol. {String(digest.revision).padStart(2, "0")}
-          </p>
-        </header>
+        </nav>
 
         <article className={styles.article}>
           <header className={styles.articleHeader}>
@@ -138,10 +126,9 @@ export default async function StoryDetailPage({
               ))}
             </ul>
           </section>
-
-          <StoryQuestionPanel isDemoData={digest.isDemoData} key={story.id} storyId={story.id} />
         </article>
       </main>
+      <StoryQuestionPanel isDemoData={digest.isDemoData} key={story.id} storyId={story.id} />
     </div>
   );
 }

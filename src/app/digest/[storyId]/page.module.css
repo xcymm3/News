@@ -21,11 +21,10 @@
   inset-block-start: var(--space-sm);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  padding: var(--space-3xs) var(--space-2xs) var(--space-3xs) var(--space-sm);
+  min-block-size: 3.25rem;
+  padding-inline: var(--space-sm);
   border: var(--rule-hair) solid var(--color-rule);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
   background: color-mix(in oklch, var(--color-paper-raised) 86%, transparent);
   box-shadow: var(--shadow-card);
   backdrop-filter: blur(0.875rem) saturate(120%);
@@ -46,16 +45,6 @@
 .backLink::before {
   margin-inline-end: var(--space-2xs);
   content: "←";
-}
-
-.issueLine {
-  margin: 0;
-  color: var(--color-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-  line-height: 1.4;
-  text-align: end;
 }
 
 .article {
@@ -222,17 +211,6 @@
 }
 
 @media (max-width: 30rem) {
-  .utilityBar {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: var(--space-2xs) var(--space-sm);
-  }
-
-  .issueLine {
-    padding-block-end: var(--space-3xs);
-    text-align: start;
-  }
-
   .summary {
     padding: var(--space-md);
   }
