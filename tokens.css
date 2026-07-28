@@ -1,31 +1,44 @@
-:root {
-  --color-paper: oklch(98.4% 0.011 180);
-  --color-paper-raised: oklch(96% 0.019 180);
-  --color-paper-muted: oklch(91% 0.035 180);
-  --color-ink: oklch(25% 0.032 256);
-  --color-ink-soft: oklch(37% 0.03 256);
-  --color-muted: oklch(52% 0.028 256);
-  --color-rule: oklch(75% 0.033 190);
-  --color-rule-strong: oklch(42% 0.045 256);
-  --color-accent: oklch(57% 0.17 28);
-  --color-accent-ink: var(--color-paper);
-  --color-accent-soft: oklch(93% 0.045 28);
-  --color-accent-secondary: oklch(67% 0.105 180);
-  --color-focus: oklch(51% 0.14 256);
+/* Hallmark · route: custom (tuned) · macrostructure: Catalogue · genre: modern-minimal
+ * vibe: warm paper, quiet precision, mobile briefing · paper: oklch(95.5% 0.018 67)
+ * accent: oklch(48% 0.105 45) umber · display: Geist · body: Geist · reading: Newsreader
+ * axes: light / geometric-sans / warm · nav: N5 · footer: Ft5 · enrichment: none */
 
-  --font-display: var(--font-newsreader), "Noto Serif SC", "Songti SC", serif;
+:root {
+  --color-paper: oklch(95.5% 0.018 67);
+  --color-paper-raised: oklch(98% 0.009 72);
+  --color-paper-muted: oklch(91% 0.027 66);
+  --color-paper-strong: oklch(86% 0.039 63);
+  --color-ink: oklch(24% 0.026 52);
+  --color-ink-soft: oklch(35% 0.026 52);
+  --color-muted: oklch(49% 0.022 57);
+  --color-rule: oklch(78% 0.028 62);
+  --color-rule-strong: oklch(61% 0.037 55);
+  --color-accent: oklch(48% 0.105 45);
+  --color-accent-ink: var(--color-paper-raised);
+  --color-accent-soft: oklch(88% 0.055 52);
+  --color-accent-secondary: oklch(58% 0.065 132);
+  --color-focus: oklch(43% 0.135 258);
+  --color-error: oklch(53% 0.165 30);
+  --color-success: oklch(48% 0.095 145);
+  --color-tile-1: oklch(72% 0.07 48);
+  --color-tile-2: oklch(67% 0.06 92);
+  --color-tile-3: oklch(64% 0.055 148);
+  --color-tile-4: oklch(61% 0.075 20);
+
+  --font-display: var(--font-geist-sans), "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --font-body: var(--font-geist-sans), "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-reading: var(--font-newsreader), "Noto Serif SC", "Songti SC", serif;
   --font-mono: var(--font-geist-mono), "Sarasa Mono SC", monospace;
 
-  --text-xs: 0.64rem;
-  --text-sm: 0.8rem;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
   --text-base: 1rem;
   --text-md: 1.25rem;
-  --text-lg: 1.5625rem;
-  --text-xl: 1.9531rem;
-  --text-2xl: 2.4414rem;
-  --text-3xl: 3.0518rem;
-  --text-4xl: 3.8147rem;
+  --text-lg: 1.5rem;
+  --text-xl: 1.875rem;
+  --text-2xl: 2.25rem;
+  --text-3xl: 3rem;
+  --text-4xl: 3.75rem;
 
   --space-3xs: 0.25rem;
   --space-2xs: 0.5rem;
@@ -37,10 +50,18 @@
   --space-2xl: 5.0625rem;
   --space-3xl: 7.5938rem;
 
-  --page-gutter: clamp(1rem, 4vw, 3.25rem);
-  --content-max: 80rem;
+  --page-gutter: clamp(1rem, 4vw, 2rem);
+  --content-max: 74rem;
   --rule-hair: 1px;
-  --radius-none: 0;
-  --radius-sm: 0.5rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 1.125rem;
+  --radius-lg: 1.5rem;
+  --radius-pill: 999px;
+  --shadow-float: 0 1.25rem 3.5rem color-mix(in oklch, var(--color-ink) 15%, transparent);
+  --shadow-card: 0 0.75rem 2rem color-mix(in oklch, var(--color-ink) 7%, transparent);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-short: 140ms;
+  --dur-medium: 220ms;
 }

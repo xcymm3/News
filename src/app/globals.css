@@ -1,8 +1,11 @@
 @import "tailwindcss";
 
+/* Hallmark · genre: modern-minimal · tone: custom warm paper · anchor hue: umber
+ * structural fingerprint: Catalogue index with a compact AI question dock */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: var(--color-paper);
+  --foreground: var(--color-ink);
 }
 
 @theme inline {
@@ -12,17 +15,10 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
 }
 
 /* App-wide foundation appended for the daily briefing interface. */

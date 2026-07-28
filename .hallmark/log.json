@@ -1,6 +1,18 @@
 {
   "builds": [
     {
+      "date": "2026-07-28",
+      "genre": "modern-minimal",
+      "theme": "custom",
+      "theme_axes": "light / geometric-sans / warm",
+      "vibe": "warm paper, quiet precision, mobile briefing",
+      "macrostructure": "Catalogue",
+      "nav": "N5 floating pill",
+      "footer": "Ft5 statement",
+      "enrichment": "none",
+      "notes": "首页改为来源色块的紧凑卡片目录，整张卡片进入详情；详情阅读与悬浮 AI 问答统一为暖棕极简系统。"
+    },
+    {
       "date": "2026-07-24",
       "genre": "editorial",
       "theme": "custom",

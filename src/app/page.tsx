@@ -15,6 +15,15 @@ function formatDate(isoDate: string) {
   }).format(new Date(isoDate));
 }
 
+function formatTime(isoDate: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "Asia/Shanghai",
+  }).format(new Date(isoDate));
+}
+
 export default async function Home() {
   let digest;
 
@@ -52,8 +61,6 @@ export default async function Home() {
     );
   }
 
-  const digestLabel = digest.isDemoData ? "演示数据" : digest.generationMode === "agent" ? "AI Agent 整理" : "自动整理候选";
-
   return (
     <div className={styles.page}>
       <a className={styles.skipLink} href="#main-content">
@@ -61,16 +68,17 @@ export default async function Home() {
       </a>
       <div className={styles.shell}>
         <header className={styles.masthead}>
-          <div className={styles.mastMeta}>
-            <span>全球简报</span>
-            <time dateTime={digest.digestDate}>{formatDate(digest.publishedAt)}</time>
-            <span>Vol. {String(digest.revision).padStart(2, "0")}</span>
+          <nav aria-label="简报导航" className={styles.navPill}>
+            <Link className={styles.navBrand} href="/">局势</Link>
+            <time className={styles.navDate} dateTime={digest.digestDate}>{formatDate(digest.publishedAt)}</time>
+            <AgentRefreshButton compact />
+          </nav>
+          <div className={styles.mastheadContent}>
+            <p className={styles.eyebrow}>GLOBAL BRIEFING</p>
+            <h1 className={styles.wordmark}>今日国际局势</h1>
+            <p className={styles.strapline}>快速浏览，按标题进入事件详情并继续追问。</p>
           </div>
-          <h1 className={styles.wordmark}>今日国际局势</h1>
-          <p className={styles.strapline}>全球动向 · 每日更新 · {digestLabel}</p>
         </header>
-
-        <AgentRefreshButton />
 
         <main id="main-content">
           <section aria-labelledby="feed-heading">
@@ -85,12 +93,16 @@ export default async function Home() {
                 <li className={styles.feedItem} key={story.id}>
                   <Link
                     aria-label={`了解详情：${story.headline}`}
-                    className={styles.storyLink}
-                    href={`/digest/${story.id}`}
-                  >
-                    <span className={styles.headline}>{story.headline}</span>
-                    <span className={styles.detailAction} aria-hidden="true">
-                      了解详情 →
+                  className={styles.storyLink}
+                  href={`/digest/${story.id}`}
+                >
+                    <span className={`${styles.storyVisual} ${styles[`tone${(story.position % 4) + 1}`]}`} aria-hidden="true">
+                      <span className={styles.storyNumber}>{String(story.position).padStart(2, "0")}</span>
+                      <span className={styles.visualMark} />
+                    </span>
+                    <span className={styles.storyCopy}>
+                      <span className={styles.headline}>{story.headline}</span>
+                      <span className={styles.storyMeta}>全球简报 · {formatTime(story.updatedAt)}</span>
                     </span>
                   </Link>
                 </li>

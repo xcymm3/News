@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 
 import styles from "@/app/page.module.css";
 
-export function AgentRefreshButton() {
+export function AgentRefreshButton({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
   const [isRefreshing, startTransition] = useTransition();
@@ -54,15 +54,21 @@ export function AgentRefreshButton() {
   };
 
   return (
-    <section className={styles.agentControl} aria-label="AI Agent 新闻整理">
-      <div>
-        <p className={styles.agentControlTitle}>AI Agent 测试</p>
-        <p className={error ? styles.agentControlError : styles.agentControlHint} role={error ? "alert" : "status"}>
+    <section className={`${styles.agentControl} ${compact ? styles.agentControlCompact : ""}`} aria-label="AI Agent 新闻整理">
+      {compact ? (
+        <p className={styles.srOnly} role={error ? "alert" : "status"}>
           {error ?? message}
         </p>
-      </div>
+      ) : (
+        <div>
+          <p className={styles.agentControlTitle}>AI Agent 测试</p>
+          <p className={error ? styles.agentControlError : styles.agentControlHint} role={error ? "alert" : "status"}>
+            {error ?? message}
+          </p>
+        </div>
+      )}
       <button className={styles.agentButton} disabled={isRunning || isRefreshing} onClick={runAgent} type="button">
-        {isRunning || isRefreshing ? "正在整理…" : "运行 Agent →"}
+        {isRunning || isRefreshing ? "整理中…" : compact ? "更新" : "运行 Agent →"}
       </button>
     </section>
   );
