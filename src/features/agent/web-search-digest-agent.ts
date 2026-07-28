@@ -425,7 +425,7 @@ function createDigestPrompt(digestDate: string, cluster: RetrievedEventCluster) 
     "Return exactly one story in a JSON object with a stories array.",
     "Return valid JSON only. Begin directly with { and never output analysis, explanations, Markdown fences, or <think> content.",
     "Each story must include headline, summary, whyItMatters, importanceScore (1-100), and sourceUrls (an array of fetched source URLs).",
-    "Write Chinese. The summary should be roughly 1,600-2,000 Chinese characters when the evidence supports that detail, with 3-5 short Markdown paragraphs. You may use ### short section headings, - lists, and **bold** for key facts. Keep whyItMatters to 100-180 Chinese characters.",
+    "Write Chinese. The summary should be roughly 1,600-2,000 Chinese characters when the evidence supports that detail, with 3-5 short Markdown paragraphs. Use ### short section headings, - lists, and **bold** for key facts when helpful. Every ### heading must occupy its own line, followed by a blank line; every list item must also occupy its own line. Keep whyItMatters to 100-180 Chinese characters.",
     "Synthesize only facts confirmed across the supplied sources. If details differ, state the uncertainty briefly. Cite every supplied source URL exactly as given; do not invent or alter URLs.",
   ].join(" ");
 }

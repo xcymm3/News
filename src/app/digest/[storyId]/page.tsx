@@ -37,24 +37,43 @@ function renderInlineMarkdown(value: string): ReactNode[] {
   ));
 }
 
+function normalizeSummaryMarkdown(value: string) {
+  return value
+    .replace(/\r\n/g, "\n")
+    // Some models put a heading and its opening sentence on the same line.
+    // Split the common date/context openings so the stored digest remains readable.
+    .replace(
+      /^(#{1,3}\s+)(.{1,72}?)(?:：|:)(?=\s*(?:截至|目前|据|当地时间|20\d{2}年|\d{1,2}月))/gm,
+      "$1$2\n\n",
+    )
+    .replace(
+      /^(#{1,3}\s+)(.{1,72}?)(?=\s+(?:截至|目前|据|当地时间|20\d{2}年|\d{1,2}月))/gm,
+      "$1$2\n\n",
+    );
+}
+
 function renderSummaryMarkdown(value: string) {
-  return value.trim().split(/\n{2,}/).filter(Boolean).map((block, index) => {
+  return normalizeSummaryMarkdown(value).trim().split(/\n{2,}/).filter(Boolean).flatMap((block, index) => {
     const lines = block.trim().split("\n").map((line) => line.trim()).filter(Boolean);
-    const heading = lines.length === 1 ? /^#{1,3}\s+(.+)$/.exec(lines[0]!) : null;
+    const heading = /^#{1,3}\s+(.+)$/.exec(lines[0] ?? "");
+    const contentLines = heading ? lines.slice(1) : lines;
+    const nodes: ReactNode[] = [];
 
     if (heading) {
-      return <h2 className={styles.summaryHeading} key={index}>{renderInlineMarkdown(heading[1]!)}</h2>;
+      nodes.push(<h2 className={styles.summaryHeading} key={`${index}-heading`}>{renderInlineMarkdown(heading[1]!)}</h2>);
     }
 
-    if (lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line))) {
-      return (
+    if (contentLines.length > 0 && contentLines.every((line) => /^[-*]\s+/.test(line))) {
+      nodes.push(
         <ul className={styles.summaryList} key={index}>
-          {lines.map((line, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(line.replace(/^[-*]\s+/, ""))}</li>)}
-        </ul>
+          {contentLines.map((line, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(line.replace(/^[-*]\s+/, ""))}</li>)}
+        </ul>,
       );
+    } else if (contentLines.length > 0) {
+      nodes.push(<p className={styles.bodyText} key={`${index}-body`}>{renderInlineMarkdown(contentLines.join(" "))}</p>);
     }
 
-    return <p className={styles.bodyText} key={index}>{renderInlineMarkdown(lines.join(" "))}</p>;
+    return nodes;
   });
 }
 
