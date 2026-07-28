@@ -10,14 +10,35 @@ import {
   WebSearchConfigurationError,
   type WebSearchCandidate,
 } from "@/features/web-search/web-search-contract";
+import {
+  clusterWebSearchCandidates,
+  selectDistinctDomainCandidates,
+  selectMultiSourceClusters,
+  type WebEventCluster,
+} from "@/features/web-search/event-clustering";
 import { WebSearchProviderError } from "@/features/web-search/web-search-provider";
 import { createWebResearchTools } from "@/features/web-search/web-research-tools";
 
 const MAX_WEB_AGENT_STORIES = 12;
-const MAX_RESEARCH_DOCUMENTS = 12;
 const MAX_DOCUMENT_CONTEXT_CHARACTERS = 2_400;
-const SOURCES_PER_SYNTHESIS_BATCH = 2;
+const MAX_RESULTS_PER_TOPIC = 20;
+const MAX_CANDIDATE_CLUSTERS = 18;
+const MINIMUM_SOURCE_DOMAINS_PER_EVENT = 3;
+const MAX_SOURCES_PER_EVENT = 5;
 const LLM_REQUEST_TIMEOUT_MS = 90_000;
+
+const INTERNATIONAL_RESEARCH_TOPICS = [
+  "国际外交 峰会 双边关系 重大新闻",
+  "俄乌 中东 冲突 安全 军事 国际新闻",
+  "全球贸易 关税 制裁 国际经济 金融",
+  "联合国 多边合作 国际组织 气候 能源",
+  "芯片 人工智能 科技监管 地缘政治 国际",
+  "美国 欧洲 俄罗斯 乌克兰 外交 安全 国际局势",
+  "中东 巴以 伊朗 海湾 红海 航运 国际新闻",
+  "东亚 台海 朝鲜半岛 东盟 外交 国际关系",
+  "全球市场 货币 利率 供应链 国际经济",
+  "国际能源 气候 矿产 航运 重大进展",
+] as const;
 
 type WebDigestStoryOutput = {
   headline?: unknown;
@@ -38,6 +59,11 @@ export type RetrievedWebSource = {
   title: string;
   publishedAt: string;
   supportingExcerpt: string;
+};
+
+type RetrievedEventCluster = {
+  cluster: WebEventCluster;
+  sources: RetrievedWebSource[];
 };
 
 export type WebSearchDigestRunResult = {
@@ -391,19 +417,20 @@ export function collectRetrievedWebSources(messages: unknown[]): RetrievedWebSou
   return [...retrievedSources.values()];
 }
 
-function createDigestPrompt(digestDate: string, storyCount: number) {
+function createDigestPrompt(digestDate: string, cluster: RetrievedEventCluster) {
   return [
     `The authoritative application date is ${digestDate}; treat it as the present date for this task.`,
-    `The following are webpages actually retrieved from the Chinese web for ${digestDate}.`,
-    `Return exactly ${storyCount} distinct stories, one for each supplied source unless sources clearly describe the same event.`,
+    "The supplied webpages are independent reports of one event from different domains.",
+    `The provisional event title is: ${cluster.cluster.headline}.`,
+    "Return exactly one story in a JSON object with a stories array.",
     "Return valid JSON only. Begin directly with { and never output analysis, explanations, Markdown fences, or <think> content.",
     "Each story must include headline, summary, whyItMatters, importanceScore (1-100), and sourceUrls (an array of fetched source URLs).",
-    "Write Chinese. Keep each summary to roughly 100-160 Chinese characters and whyItMatters to 20-40 Chinese characters.",
-    "Do not invent facts, dates, quotations, or URLs. Cite only sourceUrls present in the supplied material.",
+    "Write Chinese. Keep the summary to roughly 180-260 Chinese characters and whyItMatters to 40-70 Chinese characters.",
+    "Synthesize only facts confirmed across the supplied sources. If details differ, state the uncertainty briefly. Cite every supplied source URL exactly as given; do not invent or alter URLs.",
   ].join(" ");
 }
 
-async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>) {
+async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, task: (item: T) => Promise<R>) {
   const results: R[] = [];
   let cursor = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -418,32 +445,94 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: 
   return results;
 }
 
-async function retrieveWebSources(digestDate: string) {
-  const [searchWeb, fetchArticle] = createWebResearchTools();
-  const searchContent = await searchWeb.invoke({
-    query: `${digestDate} 中国 国际 财经 科技 社会 重要新闻`,
-    maxResults: MAX_RESEARCH_DOCUMENTS,
-  });
-  const searchPayload = parseToolContent(searchContent);
-  const candidates = Array.isArray(searchPayload?.candidates) ? searchPayload.candidates : [];
-  const urls = candidates
-    .filter(isRecord)
-    .map((candidate) => getString(candidate.canonicalUrl))
-    .filter(Boolean)
-    .slice(0, MAX_RESEARCH_DOCUMENTS);
-  const fetchedContents = await mapWithConcurrency(urls, 4, async (url) => fetchArticle.invoke({ url }));
-  const messages = [
-    { name: "search_web", content: searchContent },
-    ...fetchedContents.map((content) => ({ name: "fetch_article", content })),
-  ];
+function getSearchCandidates(content: string) {
+  const payload = parseToolContent(content);
 
-  return collectRetrievedWebSources(messages);
+  if (!Array.isArray(payload?.candidates)) {
+    return [];
+  }
+
+  return payload.candidates.flatMap((candidate) => {
+    if (!isRecord(candidate)) {
+      return [];
+    }
+
+    const typedCandidate = candidate as WebSearchCandidate;
+    return typedCandidate.canonicalUrl && typedCandidate.title && typedCandidate.sourceDomain ? [typedCandidate] : [];
+  });
 }
 
-function createSynthesisInput(digestDate: string, sources: RetrievedWebSource[]) {
+function toRetrievedSource(candidate: WebSearchCandidate, content: string): RetrievedWebSource | null {
+  const payload = parseToolContent(content);
+  const canonicalUrl = getString(payload?.canonicalUrl);
+  const text = getString(payload?.text);
+
+  if (!text || canonicalUrl !== candidate.canonicalUrl) {
+    return null;
+  }
+
+  return {
+    canonicalUrl: candidate.canonicalUrl,
+    sourceName: candidate.sourceName,
+    sourceDomain: candidate.sourceDomain,
+    title: candidate.title,
+    publishedAt: candidate.publishedAt ?? (getString(payload?.fetchedAt) || new Date().toISOString()),
+    supportingExcerpt: text.slice(0, 600),
+  };
+}
+
+async function retrieveEventClusters(digestDate: string): Promise<RetrievedEventCluster[]> {
+  const [searchWeb, fetchArticle] = createWebResearchTools();
+  const searchContents = await mapWithConcurrency(INTERNATIONAL_RESEARCH_TOPICS, 2, async (topic) => searchWeb.invoke({
+    query: `${digestDate} ${topic}`,
+    maxResults: MAX_RESULTS_PER_TOPIC,
+  }).catch((error) => {
+    console.warn("A web research topic search failed and was skipped.", error);
+    return null;
+  }));
+  const successfulSearchContents = searchContents.filter((content): content is string => typeof content === "string");
+
+  if (successfulSearchContents.length === 0) {
+    throw new WebSearchDigestAgentError("WEB_RESEARCH_UNAVAILABLE", 502, "所有国际主题的全网搜索均暂时不可用。");
+  }
+
+  const candidateClusters = selectMultiSourceClusters(
+    clusterWebSearchCandidates(successfulSearchContents.flatMap(getSearchCandidates)),
+    {
+      minimumSourceDomains: MINIMUM_SOURCE_DOMAINS_PER_EVENT,
+      maximumClusters: MAX_CANDIDATE_CLUSTERS,
+    },
+  );
+  const plannedCandidates = candidateClusters.flatMap((cluster) => selectDistinctDomainCandidates(cluster, MAX_SOURCES_PER_EVENT));
+  const fetchedContents = await mapWithConcurrency(plannedCandidates, 4, async (candidate) => ({
+    candidate,
+    content: await fetchArticle.invoke({ url: candidate.canonicalUrl }),
+  }));
+  const sourcesByUrl = new Map(
+    fetchedContents.flatMap(({ candidate, content }) => {
+      const source = toRetrievedSource(candidate, content);
+      return source ? [[source.canonicalUrl, source] as const] : [];
+    }),
+  );
+
+  return candidateClusters
+    .map((cluster) => ({
+      cluster,
+      sources: selectDistinctDomainCandidates(cluster, MAX_SOURCES_PER_EVENT)
+        .flatMap((candidate) => {
+          const source = sourcesByUrl.get(candidate.canonicalUrl);
+          return source ? [source] : [];
+        }),
+    }))
+    .filter(({ sources }) => new Set(sources.map((source) => source.sourceDomain)).size >= MINIMUM_SOURCE_DOMAINS_PER_EVENT)
+    .slice(0, MAX_WEB_AGENT_STORIES);
+}
+
+function createSynthesisInput(digestDate: string, cluster: RetrievedEventCluster) {
   return JSON.stringify({
     digestDate,
-    sources: sources.map((source) => ({
+    eventCandidate: cluster.cluster.headline,
+    sources: cluster.sources.map((source) => ({
       url: source.canonicalUrl,
       sourceName: source.sourceName,
       title: source.title,
@@ -453,36 +542,29 @@ function createSynthesisInput(digestDate: string, sources: RetrievedWebSource[])
   });
 }
 
-function splitIntoSynthesisBatches(sources: RetrievedWebSource[]) {
-  const batches: RetrievedWebSource[][] = [];
-
-  for (let index = 0; index < sources.length; index += SOURCES_PER_SYNTHESIS_BATCH) {
-    batches.push(sources.slice(index, index + SOURCES_PER_SYNTHESIS_BATCH));
-  }
-
-  return batches;
-}
-
 async function synthesizeDigestOutput(
   client: ChatOpenAI,
   digestDate: string,
-  sources: RetrievedWebSource[],
+  clusters: RetrievedEventCluster[],
 ): Promise<WebDigestOutput> {
-  const outputs: unknown[] = [];
-
-  for (const batch of splitIntoSynthesisBatches(sources)) {
+  const outputs = await mapWithConcurrency(clusters, 2, async (cluster) => {
     const finalMessage = await client.invoke([
-      { role: "system", content: createDigestPrompt(digestDate, batch.length) },
-      { role: "user", content: createSynthesisInput(digestDate, batch) },
+      { role: "system", content: createDigestPrompt(digestDate, cluster) },
+      { role: "user", content: createSynthesisInput(digestDate, cluster) },
     ]);
     const output = parseWebSearchDigestOutput(getMessageText(finalMessage.content));
+    const firstStory = Array.isArray(output.stories) && isRecord(output.stories[0]) ? output.stories[0] : null;
 
-    if (Array.isArray(output.stories)) {
-      outputs.push(...output.stories);
-    }
-  }
+    // A model may cite only a subset even when it received all evidence. The
+    // source set is a server-side invariant: every published event shows each
+    // distinct-domain page actually read for that event.
+    return firstStory ? [{
+      ...firstStory,
+      sourceUrls: cluster.sources.map((source) => source.canonicalUrl),
+    }] : [];
+  });
 
-  return { stories: outputs };
+  return { stories: outputs.flat() };
 }
 
 export async function runWebSearchDigest(digestDate: string): Promise<WebSearchDigestRunResult> {
@@ -509,12 +591,17 @@ export async function runWebSearchDigest(digestDate: string): Promise<WebSearchD
   const configuredModel = getConfiguredModel();
 
   try {
-    const retrievedSources = await retrieveWebSources(digestDate);
-    if (retrievedSources.length === 0) {
-      throw new WebSearchDigestAgentError("WEB_RESEARCH_UNAVAILABLE", 502, "未能读取到可用于生成日报的网页原文。");
+    const eventClusters = await retrieveEventClusters(digestDate);
+    if (eventClusters.length === 0) {
+      throw new WebSearchDigestAgentError(
+        "WEB_RESEARCH_UNAVAILABLE",
+        502,
+        "未找到至少由 3 个不同网站报道且可读取原文的国际事件。",
+      );
     }
 
-    const output = await synthesizeDigestOutput(configuredModel.client, digestDate, retrievedSources);
+    const retrievedSources = eventClusters.flatMap((cluster) => cluster.sources);
+    const output = await synthesizeDigestOutput(configuredModel.client, digestDate, eventClusters);
     const digest = buildWebSearchDigestFromOutput({
       digestDate,
       generatedAt: new Date(),
