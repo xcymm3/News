@@ -6,15 +6,6 @@ import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
-function formatDate(isoDate: string) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "Asia/Shanghai",
-  }).format(new Date(isoDate));
-}
-
 function formatBriefDate(isoDate: string) {
   return new Intl.DateTimeFormat("zh-CN", {
     month: "long",
@@ -83,11 +74,6 @@ export default async function Home() {
       </a>
       <div className={styles.shell}>
         <header className={styles.masthead}>
-          <nav aria-label="简报导航" className={styles.navPill}>
-            <Link className={styles.navBrand} href="/">局势</Link>
-            <time className={styles.navDate} dateTime={digest.digestDate}>{formatDate(digest.publishedAt)}</time>
-            <AgentRefreshButton compact />
-          </nav>
           <div className={styles.mastheadContent}>
             <p className={styles.eyebrow}>由 DeepSeek 总结生成 · {formatBriefDate(digest.publishedAt)}更新</p>
             <h1 className={styles.wordmark}>今日新闻速览</h1>
