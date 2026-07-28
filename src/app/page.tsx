@@ -15,11 +15,10 @@ function formatDate(isoDate: string) {
   }).format(new Date(isoDate));
 }
 
-function formatTime(isoDate: string) {
+function formatBriefDate(isoDate: string) {
   return new Intl.DateTimeFormat("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
+    month: "long",
+    day: "numeric",
     timeZone: "Asia/Shanghai",
   }).format(new Date(isoDate));
 }
@@ -90,8 +89,8 @@ export default async function Home() {
             <AgentRefreshButton compact />
           </nav>
           <div className={styles.mastheadContent}>
-            <p className={styles.eyebrow}>GLOBAL BRIEFING</p>
-            <h1 className={styles.wordmark}>今日国际局势</h1>
+            <p className={styles.eyebrow}>由 DeepSeek 总结生成</p>
+            <h1 className={styles.wordmark}>今日新闻速览 {formatBriefDate(digest.publishedAt)}更新</h1>
           </div>
         </header>
 
@@ -119,7 +118,7 @@ export default async function Home() {
                     </span>
                     <span className={styles.storyCopy}>
                       <span className={styles.headline}>{story.headline}</span>
-                      <span className={styles.storyMeta}>#{story.position} · {formatTime(story.updatedAt)}</span>
+                      <span className={styles.storyMeta}>#{story.position}</span>
                     </span>
                   </Link>
                   </li>
