@@ -63,6 +63,7 @@ pnpm db:deploy
 | `DEEPSEEK_API_KEY` | 仅用于联网新闻 Agent 的 DeepSeek 密钥 | 否 |
 | `DEEPSEEK_MODEL` | 联网新闻 Agent 使用的 DeepSeek 模型 | 否 |
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` | 仅用于新闻详情页 AI 追问的模型配置 | 否 |
+| `LLM_PROXY_URL` | 可选的 AI 追问服务端 HTTP(S) 代理地址 | 否 |
 | `NEWS_SOURCE_API_KEY` | 需要密钥的新闻来源预留配置 | 否 |
 | `NEWS_SOURCE_PROVIDER` | 原始新闻来源（默认 `multi-rss-zh`，可选 `un-news-rss`、`gdelt-doc`） | 否 |
 | `WEB_SEARCH_PROVIDER` | 全网搜索供应商标识（`bocha`、`tavily`、`brave`、`serper` 或 `custom`） | 否 |

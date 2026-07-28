@@ -1,9 +1,13 @@
 import type { DigestStory } from "@/features/digest/types";
+import { fetch as undiciFetch, ProxyAgent, type Dispatcher } from "undici";
 
 import type { StoryChatAnswer } from "./types";
 
-const QUESTION_ANSWER_TIMEOUT_MS = 30_000;
+const QUESTION_ANSWER_TIMEOUT_MS = 60_000;
 const MAX_ANSWER_LENGTH = 1_500;
+const MAX_ANSWER_TOKENS = 900;
+const MAX_QUESTION_LLM_ATTEMPTS = 2;
+const questionLlmProxyAgents = new Map<string, Dispatcher>();
 
 export type StoryQuestionTurn = {
   role: "user" | "assistant";
@@ -55,6 +59,51 @@ function getLlmConfig() {
   return { apiKey, baseUrl, model };
 }
 
+function getQuestionLlmDispatcher() {
+  const proxyUrl = process.env.LLM_PROXY_URL?.trim()
+    || process.env.HTTPS_PROXY?.trim()
+    || process.env.HTTP_PROXY?.trim();
+
+  if (!proxyUrl) {
+    return undefined;
+  }
+
+  try {
+    const protocol = new URL(proxyUrl).protocol;
+    if (protocol !== "http:" && protocol !== "https:") {
+      throw new Error("Unsupported proxy protocol.");
+    }
+  } catch {
+    throw new StoryQuestionError("STORY_QUESTION_NOT_CONFIGURED", 503, "AI 追问代理地址无效。");
+  }
+
+  const cachedAgent = questionLlmProxyAgents.get(proxyUrl);
+  if (cachedAgent) {
+    return cachedAgent;
+  }
+
+  const agent = new ProxyAgent(proxyUrl);
+  questionLlmProxyAgents.set(proxyUrl, agent);
+  return agent;
+}
+
+async function requestQuestionLlm(
+  config: ReturnType<typeof getLlmConfig>,
+  body: Record<string, unknown>,
+  signal: AbortSignal,
+) {
+  return undiciFetch(`${config.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    dispatcher: getQuestionLlmDispatcher(),
+    signal,
+  });
+}
+
 function createGroundedContext(story: DigestStory) {
   return JSON.stringify({
     headline: story.headline,
@@ -82,6 +131,23 @@ function normalizeAnswer(value: unknown) {
     .slice(0, MAX_ANSWER_LENGTH);
 }
 
+async function logQuestionLlmFailure(response: { status: number; text: () => Promise<string> }, baseUrl: string) {
+  const responseBody = await response.text().catch(() => "");
+  let provider = "unknown";
+
+  try {
+    provider = new URL(baseUrl).hostname;
+  } catch {
+    // The configuration was already validated before the request.
+  }
+
+  console.error("Story question LLM request failed.", {
+    provider,
+    status: response.status,
+    response: responseBody.slice(0, 600),
+  });
+}
+
 function createDeepSeekMessages(story: DigestStory, question: string, recentTurns: StoryQuestionTurn[]) {
   return [
     {
@@ -94,6 +160,12 @@ function createDeepSeekMessages(story: DigestStory, question: string, recentTurn
       content: `当前新闻上下文（仅用于核实本事件的当下事实）：\n${createGroundedContext(story)}\n\n最近对话：\n${JSON.stringify(recentTurns)}\n\n用户问题：\n${question}`,
     },
   ];
+}
+
+function waitForQuestionLlmRetry() {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, 400);
+  });
 }
 
 function extractStreamContent(value: unknown) {
@@ -111,29 +183,27 @@ export async function createGroundedStoryAnswer(
   story: DigestStory,
   question: string,
   recentTurns: StoryQuestionTurn[] = [],
+  attempt = 1,
 ): Promise<StoryChatAnswer> {
   const config = getLlmConfig();
   const abortController = new AbortController();
   const timeout = setTimeout(() => abortController.abort(), QUESTION_ANSWER_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const response = await requestQuestionLlm(
+      config,
+      {
         model: config.model,
         temperature: 0.2,
+        max_tokens: MAX_ANSWER_TOKENS,
         messages: createDeepSeekMessages(story, question, recentTurns),
-      }),
-      cache: "no-store",
-      signal: abortController.signal,
-    });
+      },
+      abortController.signal,
+    );
     const responseText = await response.text();
 
     if (!response.ok) {
+      await logQuestionLlmFailure(response, config.baseUrl);
       throw new StoryQuestionError("STORY_QUESTION_UNAVAILABLE", 502, "AI 服务暂时不可用，请稍后重试。");
     }
 
@@ -166,6 +236,15 @@ export async function createGroundedStoryAnswer(
       })),
     };
   } catch (error) {
+    const isRetryable = error instanceof StoryQuestionError
+      ? error.code === "STORY_QUESTION_UNAVAILABLE"
+      : true;
+
+    if (isRetryable && attempt < MAX_QUESTION_LLM_ATTEMPTS) {
+      await waitForQuestionLlmRetry();
+      return createGroundedStoryAnswer(story, question, recentTurns, attempt + 1);
+    }
+
     if (error instanceof StoryQuestionError) {
       throw error;
     }
@@ -192,23 +271,20 @@ export async function streamGroundedStoryAnswer(
   let rawAnswer = "";
 
   try {
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const response = await requestQuestionLlm(
+      config,
+      {
         model: config.model,
         temperature: 0.2,
+        max_tokens: MAX_ANSWER_TOKENS,
         stream: true,
         messages: createDeepSeekMessages(story, question, recentTurns),
-      }),
-      cache: "no-store",
-      signal: abortController.signal,
-    });
+      },
+      abortController.signal,
+    );
 
     if (!response.ok || !response.body) {
+      await logQuestionLlmFailure(response, config.baseUrl);
       throw new StoryQuestionError("STORY_QUESTION_UNAVAILABLE", 502, "AI 服务暂时不可用，请稍后重试。");
     }
 

@@ -7,6 +7,15 @@ import {
 } from "./story-question-service";
 import type { DigestStory } from "@/features/digest/types";
 
+vi.mock("undici", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("undici")>();
+
+  return {
+    ...actual,
+    fetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args),
+  };
+});
+
 const story: DigestStory = {
   id: "story-1",
   position: 1,
@@ -30,6 +39,7 @@ function configureQuestionLlm() {
   vi.stubEnv("LLM_API_KEY", "question-key");
   vi.stubEnv("LLM_BASE_URL", "https://question-llm.example.test/v1");
   vi.stubEnv("LLM_MODEL", "question-model");
+  vi.stubEnv("LLM_PROXY_URL", "");
 }
 
 describe("createGroundedStoryAnswer", () => {
@@ -92,6 +102,17 @@ describe("createGroundedStoryAnswer", () => {
       code: "STORY_QUESTION_UNAVAILABLE",
       status: 502,
     } satisfies Partial<StoryQuestionError>);
+  });
+
+  it("retries one transient provider failure before returning an answer", async () => {
+    configureQuestionLlm();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("temporarily unavailable", { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: "重试后成功。" } }] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createGroundedStoryAnswer(story, "再试一次")).resolves.toMatchObject({ answer: "重试后成功。" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("forwards stream chunks and preserves the completed formatted answer", async () => {

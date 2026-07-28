@@ -1,6 +1,6 @@
 import {
   StoryQuestionError,
-  streamGroundedStoryAnswer,
+  createGroundedStoryAnswer,
   type StoryQuestionTurn,
 } from "@/features/chat/story-question-service";
 import type { StoryChatAnswer } from "@/features/chat/types";
@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 const MAX_QUESTION_LENGTH = 500;
 const MAX_RECENT_TURNS = 8;
 const MAX_TURN_LENGTH = 800;
+const STORY_LOOKUP_ATTEMPTS = 2;
 
 type StoryQuestionRequest = {
   storyId?: unknown;
@@ -46,35 +47,52 @@ function noStoreJson(body: unknown, status = 200) {
   });
 }
 
+function waitForStoryLookupRetry() {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, 400);
+  });
+}
+
+async function findCurrentStory(storyId: string) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= STORY_LOOKUP_ATTEMPTS; attempt += 1) {
+    try {
+      const digest = await digestService.getTodayDigest();
+      return digest.stories.find((item) => item.id === storyId) ?? null;
+    } catch (error) {
+      lastError = error;
+
+      if (attempt < STORY_LOOKUP_ATTEMPTS) {
+        await waitForStoryLookupRetry();
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 type StoryQuestionStreamEvent =
   | { type: "delta"; content: string }
   | { type: "done"; answer: StoryChatAnswer }
   | { type: "error"; message: string };
 
-function createStreamResponse(
+async function createStreamResponse(
   story: DigestStory,
   question: string,
   recentTurns: StoryQuestionTurn[],
 ) {
+  // Generate the complete provider response before opening the browser stream.
+  // This preserves the client-side typewriter effect while allowing a real 502
+  // to be returned if the upstream model rejects or drops the request.
+  const answer = await createGroundedStoryAnswer(story, question, recentTurns);
   const encoder = new TextEncoder();
   const encode = (event: StoryQuestionStreamEvent) => encoder.encode(`${JSON.stringify(event)}\n`);
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      try {
-        const answer = await streamGroundedStoryAnswer(story, question, recentTurns, (content) => {
-          controller.enqueue(encode({ type: "delta", content }));
-        });
-
-        controller.enqueue(encode({ type: "done", answer }));
-      } catch (error) {
-        const message = error instanceof StoryQuestionError
-          ? error.message
-          : "暂时无法整理回答，请稍后重试。";
-
-        controller.enqueue(encode({ type: "error", message }));
-      } finally {
-        controller.close();
-      }
+    start(controller) {
+      controller.enqueue(encode({ type: "delta", content: answer.answer }));
+      controller.enqueue(encode({ type: "done", answer }));
+      controller.close();
     },
   });
 
@@ -123,28 +141,43 @@ export async function POST(request: Request) {
     return invalidRequest("问题不能为空，且不能超过 500 字。");
   }
 
+  let story: DigestStory | null;
+
   try {
-    const digest = await digestService.getTodayDigest();
-    const story = digest.stories.find((item) => item.id === storyId);
+    story = await findCurrentStory(storyId);
+  } catch (error) {
+    console.error("Failed to load the current story for a question.", error);
 
-    if (!story) {
-      return Response.json(
-        {
-          error: {
-            code: "STORY_NOT_FOUND",
-            message: "未找到当前事件，无法继续追问。",
-          },
+    return noStoreJson(
+      {
+        error: {
+          code: "STORY_LOOKUP_UNAVAILABLE",
+          message: "暂时无法读取当前新闻，请稍后重试。",
         },
-        {
-          status: 404,
-          headers: {
-            "Cache-Control": "no-store",
-          },
-        },
-      );
-    }
+      },
+      503,
+    );
+  }
 
-    return createStreamResponse(story, question, parseRecentTurns(body.recentTurns));
+  if (!story) {
+    return Response.json(
+      {
+        error: {
+          code: "STORY_NOT_FOUND",
+          message: "未找到当前事件，无法继续追问。",
+        },
+      },
+      {
+        status: 404,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
+
+  try {
+    return await createStreamResponse(story, question, parseRecentTurns(body.recentTurns));
   } catch (error) {
     if (error instanceof StoryQuestionError) {
       return noStoreJson(
