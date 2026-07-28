@@ -16,6 +16,7 @@ import { createWebResearchTools } from "@/features/web-search/web-research-tools
 const MAX_WEB_AGENT_STORIES = 12;
 const MAX_RESEARCH_DOCUMENTS = 12;
 const MAX_DOCUMENT_CONTEXT_CHARACTERS = 2_400;
+const SOURCES_PER_SYNTHESIS_BATCH = 2;
 const LLM_REQUEST_TIMEOUT_MS = 90_000;
 
 type WebDigestStoryOutput = {
@@ -117,6 +118,8 @@ function getConfiguredModel() {
       apiKey,
       model,
       temperature: 0.2,
+      maxTokens: 1_024,
+      streaming: true,
       timeout: LLM_REQUEST_TIMEOUT_MS,
       maxRetries: 0,
       configuration: { baseURL: baseUrl },
@@ -389,13 +392,13 @@ export function collectRetrievedWebSources(messages: unknown[]): RetrievedWebSou
   return [...retrievedSources.values()];
 }
 
-function createDigestPrompt(digestDate: string) {
+function createDigestPrompt(digestDate: string, storyCount: number) {
   return [
     `The authoritative application date is ${digestDate}; treat it as the present date for this task.`,
     `The following are webpages actually retrieved from the Chinese web for ${digestDate}.`,
-    "Return exactly 12 distinct stories when the retrieved material supports it; otherwise return the maximum defensible number.",
+    `Return exactly ${storyCount} distinct stories, one for each supplied source unless sources clearly describe the same event.`,
     "Each story must include headline, summary, whyItMatters, importanceScore (1-100), and sourceUrls (an array of fetched source URLs).",
-    "Write Chinese. Summaries should be self-contained and detailed enough for a reader who will not open the original page.",
+    "Write Chinese. Keep each summary to roughly 160-220 Chinese characters and whyItMatters to 30-50 Chinese characters.",
     "Do not invent facts, dates, quotations, or URLs. Cite only sourceUrls present in the supplied material.",
   ].join(" ");
 }
@@ -450,6 +453,38 @@ function createSynthesisInput(digestDate: string, sources: RetrievedWebSource[])
   });
 }
 
+function splitIntoSynthesisBatches(sources: RetrievedWebSource[]) {
+  const batches: RetrievedWebSource[][] = [];
+
+  for (let index = 0; index < sources.length; index += SOURCES_PER_SYNTHESIS_BATCH) {
+    batches.push(sources.slice(index, index + SOURCES_PER_SYNTHESIS_BATCH));
+  }
+
+  return batches;
+}
+
+async function synthesizeDigestOutput(
+  client: ChatOpenAI,
+  digestDate: string,
+  sources: RetrievedWebSource[],
+): Promise<WebDigestOutput> {
+  const outputs: unknown[] = [];
+
+  for (const batch of splitIntoSynthesisBatches(sources)) {
+    const finalMessage = await client.invoke([
+      { role: "system", content: createDigestPrompt(digestDate, batch.length) },
+      { role: "user", content: createSynthesisInput(digestDate, batch) },
+    ]);
+    const output = parseWebSearchDigestOutput(getMessageText(finalMessage.content));
+
+    if (Array.isArray(output.stories)) {
+      outputs.push(...output.stories);
+    }
+  }
+
+  return { stories: outputs };
+}
+
 export async function runWebSearchDigest(digestDate: string): Promise<WebSearchDigestRunResult> {
   let searchConfig;
 
@@ -479,11 +514,7 @@ export async function runWebSearchDigest(digestDate: string): Promise<WebSearchD
       throw new WebSearchDigestAgentError("WEB_RESEARCH_UNAVAILABLE", 502, "未能读取到可用于生成日报的网页原文。");
     }
 
-    const finalMessage = await configuredModel.client.invoke([
-      { role: "system", content: createDigestPrompt(digestDate) },
-      { role: "user", content: createSynthesisInput(digestDate, retrievedSources) },
-    ]);
-    const output = parseWebSearchDigestOutput(getMessageText(finalMessage.content));
+    const output = await synthesizeDigestOutput(configuredModel.client, digestDate, retrievedSources);
     const digest = buildWebSearchDigestFromOutput({
       digestDate,
       generatedAt: new Date(),
@@ -504,6 +535,10 @@ export async function runWebSearchDigest(digestDate: string): Promise<WebSearchD
 
     if (error instanceof WebSearchProviderError) {
       throw new WebSearchDigestAgentError("WEB_RESEARCH_UNAVAILABLE", error.status, error.message);
+    }
+
+    if (error instanceof Error && /timed out/i.test(error.message)) {
+      throw new WebSearchDigestAgentError("WEB_RESEARCH_UNAVAILABLE", 502, "AI 服务响应超时，请稍后重试。");
     }
 
     console.error("Failed to run the LangChain web research agent.", error);
