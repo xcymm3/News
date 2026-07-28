@@ -89,8 +89,8 @@ export default async function Home() {
             <AgentRefreshButton compact />
           </nav>
           <div className={styles.mastheadContent}>
-            <p className={styles.eyebrow}>由 DeepSeek 总结生成</p>
-            <h1 className={styles.wordmark}>今日新闻速览 {formatBriefDate(digest.publishedAt)}更新</h1>
+            <p className={styles.eyebrow}>由 DeepSeek 总结生成 · {formatBriefDate(digest.publishedAt)}更新</p>
+            <h1 className={styles.wordmark}>今日新闻速览</h1>
           </div>
         </header>
 
