@@ -210,9 +210,7 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
   };
 
   const closeDialog = () => {
-    if (!isSubmitting) {
-      setIsExpanded(false);
-    }
+    setIsExpanded(false);
   };
 
   const revealNextCharacter = () => {
@@ -266,7 +264,7 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
 
     const focusInput = window.requestAnimationFrame(() => dialogInputRef.current?.focus());
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isSubmitting) {
+      if (event.key === "Escape") {
         setIsExpanded(false);
       }
     };
@@ -415,53 +413,55 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
 
   return (
     <>
-      <aside className={styles.dock} aria-label="AI 追问入口">
-        <div className={styles.dockContent}>
-          {latestAnswer ? (
-            <section aria-live="polite" className={styles.answerPreview}>
-              <div className={styles.previewHeader}>
-                <p className={styles.previewEyebrow}>AI 回答</p>
-                <button className={styles.previewExpandButton} onClick={openDialog} type="button">
-                  完整对话
-                </button>
-              </div>
-              <p className={styles.previewText} ref={previewTextRef}>
-                {latestAnswer.content ? plainTextFromMarkdown(latestAnswer.content) : "正在生成回答…"}
+      {!isExpanded ? (
+        <aside className={styles.dock} aria-label="AI 追问入口">
+          <div className={styles.dockContent}>
+            {latestAnswer ? (
+              <section aria-live="polite" className={styles.answerPreview}>
+                <div className={styles.previewHeader}>
+                  <p className={styles.previewEyebrow}>AI 回答</p>
+                  <button className={styles.previewExpandButton} onClick={openDialog} type="button">
+                    完整对话
+                  </button>
+                </div>
+                <p className={styles.previewText} ref={previewTextRef}>
+                  {latestAnswer.content ? plainTextFromMarkdown(latestAnswer.content) : "正在生成回答…"}
+                </p>
+              </section>
+            ) : null}
+            <form className={styles.dockInner} onSubmit={submitQuestion}>
+              <label className={styles.srOnly} htmlFor={dockInputId}>
+                向 AI 提问
+              </label>
+              <input
+                aria-describedby={error ? errorId : undefined}
+                aria-invalid={Boolean(error)}
+                className={styles.dockInput}
+                disabled={isSubmitting}
+                id={dockInputId}
+                maxLength={500}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  setError(null);
+                }}
+                placeholder="向 AI 追问这条新闻…"
+                value={draft}
+              />
+              <button aria-label={isSubmitting ? "AI 正在回答" : "发送问题"} className={`${styles.compactSubmitButton} ${styles.iconButton}`} disabled={isSubmitting || !draft.trim()} title={isSubmitting ? "AI 正在回答" : "发送问题"} type="submit">
+                <SendIcon />
+              </button>
+              <button aria-label="展开完整对话" className={`${styles.expandButton} ${styles.iconButton}`} onClick={openDialog} title="展开完整对话" type="button">
+                <ExpandIcon />
+              </button>
+            </form>
+            {error ? (
+              <p className={styles.dockError} id={errorId} role="alert">
+                {error}
               </p>
-            </section>
-          ) : null}
-          <form className={styles.dockInner} onSubmit={submitQuestion}>
-            <label className={styles.srOnly} htmlFor={dockInputId}>
-              向 AI 提问
-            </label>
-            <input
-              aria-describedby={error ? errorId : undefined}
-              aria-invalid={Boolean(error)}
-              className={styles.dockInput}
-              disabled={isSubmitting}
-              id={dockInputId}
-              maxLength={500}
-              onChange={(event) => {
-                setDraft(event.target.value);
-                setError(null);
-              }}
-              placeholder="向 AI 追问这条新闻…"
-              value={draft}
-            />
-            <button aria-label={isSubmitting ? "AI 正在回答" : "发送问题"} className={`${styles.compactSubmitButton} ${styles.iconButton}`} disabled={isSubmitting || !draft.trim()} title={isSubmitting ? "AI 正在回答" : "发送问题"} type="submit">
-              <SendIcon />
-            </button>
-            <button aria-label="展开完整对话" className={`${styles.expandButton} ${styles.iconButton}`} disabled={isSubmitting} onClick={openDialog} title="展开完整对话" type="button">
-              <ExpandIcon />
-            </button>
-          </form>
-          {error ? (
-            <p className={styles.dockError} id={errorId} role="alert">
-              {error}
-            </p>
-          ) : null}
-        </div>
-      </aside>
+            ) : null}
+          </div>
+        </aside>
+      ) : null}
 
       {isExpanded ? (
         <div className={styles.backdrop} onMouseDown={(event) => event.currentTarget === event.target && closeDialog()}>
@@ -473,7 +473,7 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
                   围绕这条新闻继续问
                 </h2>
               </div>
-              <button aria-label="收起完整对话" className={`${styles.collapseButton} ${styles.iconButton}`} disabled={isSubmitting} onClick={closeDialog} title="收起完整对话" type="button">
+              <button aria-label="收起完整对话" className={`${styles.collapseButton} ${styles.iconButton}`} onClick={closeDialog} title="收起完整对话" type="button">
                 <CollapseIcon />
               </button>
             </header>
