@@ -22,6 +22,9 @@ const newsreader = Newsreader({
 export const metadata: Metadata = {
   title: "今日国际局势｜局势索引",
   description: "以可追溯摘要呈现今日国际局势重点。",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
