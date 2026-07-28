@@ -118,8 +118,7 @@ function getConfiguredModel() {
       apiKey,
       model,
       temperature: 0.2,
-      maxTokens: 1_024,
-      streaming: true,
+      maxTokens: 640,
       timeout: LLM_REQUEST_TIMEOUT_MS,
       maxRetries: 0,
       configuration: { baseURL: baseUrl },
@@ -397,8 +396,9 @@ function createDigestPrompt(digestDate: string, storyCount: number) {
     `The authoritative application date is ${digestDate}; treat it as the present date for this task.`,
     `The following are webpages actually retrieved from the Chinese web for ${digestDate}.`,
     `Return exactly ${storyCount} distinct stories, one for each supplied source unless sources clearly describe the same event.`,
+    "Return valid JSON only. Begin directly with { and never output analysis, explanations, Markdown fences, or <think> content.",
     "Each story must include headline, summary, whyItMatters, importanceScore (1-100), and sourceUrls (an array of fetched source URLs).",
-    "Write Chinese. Keep each summary to roughly 160-220 Chinese characters and whyItMatters to 30-50 Chinese characters.",
+    "Write Chinese. Keep each summary to roughly 100-160 Chinese characters and whyItMatters to 20-40 Chinese characters.",
     "Do not invent facts, dates, quotations, or URLs. Cite only sourceUrls present in the supplied material.",
   ].join(" ");
 }
