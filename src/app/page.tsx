@@ -92,7 +92,6 @@ export default async function Home() {
           <div className={styles.mastheadContent}>
             <p className={styles.eyebrow}>GLOBAL BRIEFING</p>
             <h1 className={styles.wordmark}>今日国际局势</h1>
-            <p className={styles.strapline}>快速浏览，按标题进入事件详情并继续追问。</p>
           </div>
         </header>
 
@@ -120,7 +119,7 @@ export default async function Home() {
                     </span>
                     <span className={styles.storyCopy}>
                       <span className={styles.headline}>{story.headline}</span>
-                      <span className={styles.storyMeta}>全球简报 · {formatTime(story.updatedAt)}</span>
+                      <span className={styles.storyMeta}>#{story.position} · {formatTime(story.updatedAt)}</span>
                     </span>
                   </Link>
                   </li>
@@ -129,13 +128,6 @@ export default async function Home() {
             </ol>
           </section>
         </main>
-        <footer className={styles.footer}>
-          {digest.isDemoData
-            ? "局势索引 · 所有条目均为演示数据"
-            : digest.generationMode === "agent"
-              ? "局势索引 · AI Agent 基于联网检索整理，点开查看原始出处"
-              : "局势索引 · 自动整理候选，点开查看原始出处"}
-        </footer>
       </div>
     </div>
   );

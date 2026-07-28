@@ -94,13 +94,6 @@ export default async function StoryDetailPage({
 
         <article className={styles.article}>
           <header className={styles.articleHeader}>
-            <p className={styles.meta}>
-              {digest.isDemoData
-                ? "虚构演示数据"
-                : digest.generationMode === "agent"
-                  ? "AI Agent 整理 · 未独立核验"
-                  : "自动整理候选 · 未独立核验"} · 第 {story.position} 条
-            </p>
             <h1 className={styles.title}>{story.headline}</h1>
             <p className={styles.updatedAt}>
               <time dateTime={story.updatedAt}>更新于 {formatDateTime(story.updatedAt)}</time>
