@@ -29,21 +29,16 @@ export class StoryQuestionError extends Error {
   }
 }
 
-function getDeepSeekConfig() {
-  const baseUrl = (process.env.LLM_BASE_URL?.trim() || "https://api.deepseek.com").replace(/\/+$/, "");
-  const isDeepSeek = isDeepSeekBaseUrl(baseUrl);
-  const apiKey = isDeepSeek
-    ? process.env.DEEPSEEK_API_KEY?.trim() || process.env.LLM_API_KEY?.trim()
-    : process.env.LLM_API_KEY?.trim() || process.env.DEEPSEEK_API_KEY?.trim();
-  const model = isDeepSeek
-    ? process.env.DEEPSEEK_MODEL?.trim() || process.env.LLM_MODEL?.trim() || "deepseek-v4-flash"
-    : process.env.LLM_MODEL?.trim() || process.env.DEEPSEEK_MODEL?.trim();
+function getLlmConfig() {
+  const baseUrl = process.env.LLM_BASE_URL?.trim().replace(/\/+$/, "");
+  const apiKey = process.env.LLM_API_KEY?.trim();
+  const model = process.env.LLM_MODEL?.trim();
 
-  if (!apiKey || !model) {
+  if (!apiKey || !baseUrl || !model) {
     throw new StoryQuestionError(
       "STORY_QUESTION_NOT_CONFIGURED",
       503,
-      "尚未完整配置 AI 服务，暂时无法进行 AI 追问。",
+      "尚未完整配置 AI 追问服务，请设置 LLM_API_KEY、LLM_BASE_URL 和 LLM_MODEL。",
     );
   }
 
@@ -58,14 +53,6 @@ function getDeepSeekConfig() {
   }
 
   return { apiKey, baseUrl, model };
-}
-
-function isDeepSeekBaseUrl(baseUrl: string) {
-  try {
-    return new URL(baseUrl).hostname === "api.deepseek.com";
-  } catch {
-    return false;
-  }
 }
 
 function createGroundedContext(story: DigestStory) {
@@ -125,7 +112,7 @@ export async function createGroundedStoryAnswer(
   question: string,
   recentTurns: StoryQuestionTurn[] = [],
 ): Promise<StoryChatAnswer> {
-  const config = getDeepSeekConfig();
+  const config = getLlmConfig();
   const abortController = new AbortController();
   const timeout = setTimeout(() => abortController.abort(), QUESTION_ANSWER_TIMEOUT_MS);
 
@@ -199,7 +186,7 @@ export async function streamGroundedStoryAnswer(
   recentTurns: StoryQuestionTurn[] = [],
   onDelta: (content: string) => void,
 ): Promise<StoryChatAnswer> {
-  const config = getDeepSeekConfig();
+  const config = getLlmConfig();
   const abortController = new AbortController();
   const timeout = setTimeout(() => abortController.abort(), QUESTION_ANSWER_TIMEOUT_MS);
   let rawAnswer = "";

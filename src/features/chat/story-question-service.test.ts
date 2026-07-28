@@ -26,15 +26,21 @@ const story: DigestStory = {
   ],
 };
 
+function configureQuestionLlm() {
+  vi.stubEnv("LLM_API_KEY", "question-key");
+  vi.stubEnv("LLM_BASE_URL", "https://question-llm.example.test/v1");
+  vi.stubEnv("LLM_MODEL", "question-model");
+}
+
 describe("createGroundedStoryAnswer", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
 
-  it("grounds the DeepSeek request in the story fields and binds citations on the server", async () => {
-    vi.stubEnv("DEEPSEEK_API_KEY", "test-key");
-    vi.stubEnv("DEEPSEEK_MODEL", "test-model");
+  it("uses the dedicated LLM configuration and binds citations on the server", async () => {
+    configureQuestionLlm();
+    vi.stubEnv("DEEPSEEK_API_KEY", "digest-only-key");
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ choices: [{ message: { content: "基于现有材料，后续安排尚未明确。" } }] }), { status: 200 }),
     );
@@ -47,6 +53,12 @@ describe("createGroundedStoryAnswer", () => {
 
     const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { messages: Array<{ content: string }> };
 
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://question-llm.example.test/v1/chat/completions",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer question-key" }),
+      }),
+    );
     expect(request.messages[0]?.content).toContain("可以直接解释稳定的通用知识");
     expect(request.messages[0]?.content).toContain("不要默认建议用户查看 RSS 链接");
     expect(request.messages[1]?.content).toContain("测试新闻标题");
@@ -59,8 +71,9 @@ describe("createGroundedStoryAnswer", () => {
   });
 
   it("reports a clear configuration error without attempting a request", async () => {
-    vi.stubEnv("DEEPSEEK_API_KEY", "");
     vi.stubEnv("LLM_API_KEY", "");
+    vi.stubEnv("LLM_BASE_URL", "");
+    vi.stubEnv("LLM_MODEL", "");
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -72,7 +85,7 @@ describe("createGroundedStoryAnswer", () => {
   });
 
   it("converts an unavailable model response into a safe API error", async () => {
-    vi.stubEnv("DEEPSEEK_API_KEY", "test-key");
+    configureQuestionLlm();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("temporarily unavailable", { status: 503 })));
 
     await expect(createGroundedStoryAnswer(story, "后续会怎样？")).rejects.toMatchObject({
@@ -81,8 +94,8 @@ describe("createGroundedStoryAnswer", () => {
     } satisfies Partial<StoryQuestionError>);
   });
 
-  it("forwards DeepSeek stream chunks and preserves the completed formatted answer", async () => {
-    vi.stubEnv("DEEPSEEK_API_KEY", "test-key");
+  it("forwards stream chunks and preserves the completed formatted answer", async () => {
+    configureQuestionLlm();
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {

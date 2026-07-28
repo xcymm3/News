@@ -104,38 +104,17 @@ function stableId(prefix: string, value: string) {
   return `${prefix}-${createHash("sha256").update(value).digest("hex").slice(0, 24)}`;
 }
 
-function isDeepSeekBaseUrl(baseUrl: string) {
-  try {
-    return new URL(baseUrl).hostname === "api.deepseek.com";
-  } catch {
-    return false;
-  }
-}
+function getDeepSeekDigestModel() {
+  const baseUrl = "https://api.deepseek.com";
+  const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
+  const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
 
-function getConfiguredModel() {
-  const baseUrl = (process.env.LLM_BASE_URL?.trim() || "https://api.deepseek.com").replace(/\/+$/, "");
-  const isDeepSeek = isDeepSeekBaseUrl(baseUrl);
-  const apiKey = isDeepSeek
-    ? process.env.DEEPSEEK_API_KEY?.trim() || process.env.LLM_API_KEY?.trim()
-    : process.env.LLM_API_KEY?.trim() || process.env.DEEPSEEK_API_KEY?.trim();
-  const model = isDeepSeek
-    ? process.env.DEEPSEEK_MODEL?.trim() || process.env.LLM_MODEL?.trim()
-    : process.env.LLM_MODEL?.trim() || process.env.DEEPSEEK_MODEL?.trim();
-
-  if (!apiKey || !model) {
+  if (!apiKey) {
     throw new WebSearchDigestAgentError(
       "WEB_RESEARCH_MODEL_NOT_CONFIGURED",
       503,
-      "尚未完整配置 AI 模型服务。",
+      "尚未配置 DeepSeek 日报整理服务。",
     );
-  }
-
-  try {
-    if (new URL(baseUrl).protocol !== "https:") {
-      throw new Error("Only HTTPS is allowed.");
-    }
-  } catch {
-    throw new WebSearchDigestAgentError("WEB_RESEARCH_MODEL_NOT_CONFIGURED", 503, "AI 服务地址配置无效。");
   }
 
   return {
@@ -588,7 +567,7 @@ export async function runWebSearchDigest(digestDate: string): Promise<WebSearchD
     );
   }
 
-  const configuredModel = getConfiguredModel();
+  const configuredModel = getDeepSeekDigestModel();
 
   try {
     const eventClusters = await retrieveEventClusters(digestDate);
