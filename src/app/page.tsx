@@ -24,6 +24,22 @@ function formatTime(isoDate: string) {
   }).format(new Date(isoDate));
 }
 
+function getStoryCategory(headline: string) {
+  if (/人工智能|\bAI\b|芯片|机器人|科技|数字经济/i.test(headline)) {
+    return "科技";
+  }
+
+  if (/市场|经济|贸易|金融|外汇|货币|央行|原油|投资|股市|价格|汇率/i.test(headline)) {
+    return "财经";
+  }
+
+  if (/外交|国际|联合国|东盟|中东|美国|欧洲|乌克兰|伊朗|以色列|俄罗斯|全球/i.test(headline)) {
+    return "国际";
+  }
+
+  return "时事";
+}
+
 export default async function Home() {
   let digest;
 
@@ -89,24 +105,27 @@ export default async function Home() {
               <p className={styles.feedMeta}>{digest.stories.length} 条更新</p>
             </div>
             <ol className={styles.feed} aria-label="今日新闻标题">
-              {digest.stories.map((story) => (
-                <li className={styles.feedItem} key={story.id}>
+              {digest.stories.map((story) => {
+                const category = getStoryCategory(story.headline);
+
+                return (
+                  <li className={styles.feedItem} key={story.id}>
                   <Link
                     aria-label={`了解详情：${story.headline}`}
-                  className={styles.storyLink}
-                  href={`/digest/${story.id}`}
-                >
+                    className={styles.storyLink}
+                    href={`/digest/${story.id}`}
+                  >
                     <span className={`${styles.storyVisual} ${styles[`tone${(story.position % 4) + 1}`]}`} aria-hidden="true">
-                      <span className={styles.storyNumber}>{String(story.position).padStart(2, "0")}</span>
-                      <span className={styles.visualMark} />
+                      <span className={styles.storyCategory}>{category}</span>
                     </span>
                     <span className={styles.storyCopy}>
                       <span className={styles.headline}>{story.headline}</span>
                       <span className={styles.storyMeta}>全球简报 · {formatTime(story.updatedAt)}</span>
                     </span>
                   </Link>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ol>
           </section>
         </main>

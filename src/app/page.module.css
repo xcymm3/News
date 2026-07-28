@@ -1,6 +1,6 @@
 /* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 · macrostructure: Catalogue · genre: modern-minimal
  * theme: custom (warm paper, quiet precision, mobile briefing) · anchor hue: umber · nav: N5 · footer: Ft5
- * enrichment: none · knobs: cards=uniform landscape, density=single-to-two-column, accent=number tile
+ * enrichment: none · knobs: cards=uniform landscape, density=single-to-two-column, accent=category tile
  * contrast: pass (40–41) · slop: pass (42–45) · honest: pass (46) · chrome: pass (47) · tokens: pass (48)
  * responsive: pass (34, 49–53) · motion: transform and opacity only */
 
@@ -273,7 +273,7 @@
 .storyVisual {
   position: relative;
   display: grid;
-  align-content: space-between;
+  place-items: center;
   aspect-ratio: 4 / 3;
   min-inline-size: 0;
   padding: var(--space-xs);
@@ -282,37 +282,19 @@
   color: var(--color-paper-raised);
 }
 
-.storyVisual::after {
-  position: absolute;
-  inset-inline: 0;
-  inset-block-end: 0;
-  block-size: 34%;
-  content: "";
-  background: color-mix(in oklch, var(--color-ink) 22%, transparent);
-}
-
 .tone1 { background: var(--color-tile-1); }
 .tone2 { background: var(--color-tile-2); }
 .tone3 { background: var(--color-tile-3); }
 .tone4 { background: var(--color-tile-4); }
 
-.storyNumber,
-.visualMark {
+.storyCategory {
   position: relative;
   z-index: 1;
-}
-
-.storyNumber {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.visualMark {
-  inline-size: 2.4rem;
-  block-size: 0.32rem;
-  border-radius: var(--radius-pill);
-  background: var(--color-paper-raised);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 720;
+  letter-spacing: -0.05em;
+  line-height: 1;
 }
 
 .storyCopy {
