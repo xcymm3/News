@@ -7,6 +7,10 @@
   z-index: 20;
   inset-inline: 0;
   inset-block-end: 0;
+  display: flex;
+  align-items: end;
+  box-sizing: border-box;
+  max-block-size: 100dvh;
   padding: var(--space-sm) var(--page-gutter);
   pointer-events: none;
 }
@@ -15,13 +19,17 @@
   display: grid;
   gap: var(--space-2xs);
   inline-size: min(100%, 44rem);
+  max-block-size: 100%;
   margin-inline: auto;
   pointer-events: auto;
 }
 
 .answerPreview {
+  min-block-size: 0;
+  max-block-size: calc(100dvh - 4.5rem);
   display: grid;
   gap: var(--space-2xs);
+  overflow: hidden;
   padding: var(--space-sm);
   border: var(--rule-hair) solid var(--color-rule-strong);
   border-radius: var(--radius-sm);
@@ -49,7 +57,7 @@
 }
 
 .previewText {
-  block-size: 5.04em;
+  block-size: min(5.04em, calc(100dvh - 8.5rem));
   margin: 0;
   overflow: hidden auto;
   color: var(--color-ink-soft);
@@ -57,7 +65,7 @@
   font-size: var(--text-sm);
   line-height: 1.68;
   overflow-wrap: anywhere;
-  mask-image: linear-gradient(to bottom, transparent 0%, currentColor 26%, currentColor 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, currentColor 10%, currentColor 100%);
   scrollbar-width: none;
 }
 
