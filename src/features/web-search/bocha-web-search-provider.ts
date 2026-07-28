@@ -9,7 +9,7 @@ import {
 import { WebSearchProviderError } from "./web-search-provider-error";
 
 const DEFAULT_BOCHA_BASE_URL = "https://api.bochaai.com/v1";
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 30_000;
 
 type BochaWebPage = {
   id?: unknown;
