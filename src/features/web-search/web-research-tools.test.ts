@@ -45,4 +45,16 @@ describe("web research tools", () => {
 
     expect(article.text).toBe("网页正文");
   });
+
+  it("returns a recoverable tool result when one article cannot be read", async () => {
+    const [, fetchArticle] = createWebResearchTools({
+      fetchImplementation: async () => new Response(null, { status: 503 }),
+    });
+    const result = await fetchArticle.invoke({ url: "https://news.example.com/article" });
+
+    expect(JSON.parse(result)).toEqual(expect.objectContaining({
+      canonicalUrl: "https://news.example.com/article",
+      error: "暂时无法读取候选网页原文。",
+    }));
+  });
 });

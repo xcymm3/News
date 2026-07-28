@@ -1,5 +1,4 @@
 import {
-  getWebSearchConfig,
   normalizeWebSearchCandidate,
   type WebSearchCandidate,
   type WebSearchConfig,
@@ -7,6 +6,7 @@ import {
   type WebSearchRequest,
   type WebSearchResult,
 } from "./web-search-contract";
+import { WebSearchProviderError } from "./web-search-provider-error";
 
 const DEFAULT_TAVILY_BASE_URL = "https://api.tavily.com";
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -22,17 +22,6 @@ type TavilyResult = {
 type TavilyResponse = {
   results?: unknown;
 };
-
-export class WebSearchProviderError extends Error {
-  constructor(
-    readonly code: "WEB_SEARCH_NOT_CONFIGURED" | "WEB_SEARCH_PROVIDER_UNSUPPORTED" | "WEB_SEARCH_UNAVAILABLE" | "WEB_SEARCH_INVALID_RESPONSE",
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = "WebSearchProviderError";
-  }
-}
 
 function getString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -127,22 +116,4 @@ export class TavilyWebSearchProvider implements WebSearchProvider {
       clearTimeout(timeout);
     }
   }
-}
-
-export function createConfiguredWebSearchProvider() {
-  const config = getWebSearchConfig();
-
-  if (!config) {
-    throw new WebSearchProviderError("WEB_SEARCH_NOT_CONFIGURED", 503, "尚未配置全网搜索 API。请设置 WEB_SEARCH_PROVIDER 和 WEB_SEARCH_API_KEY。");
-  }
-
-  if (config.provider === "tavily") {
-    return new TavilyWebSearchProvider(config);
-  }
-
-  throw new WebSearchProviderError(
-    "WEB_SEARCH_PROVIDER_UNSUPPORTED",
-    503,
-    `当前尚未实现 ${config.provider} 搜索适配器，请先使用 tavily。`,
-  );
 }

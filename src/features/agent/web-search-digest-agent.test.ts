@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildWebSearchDigestFromOutput, collectRetrievedWebSources } from "./web-search-digest-agent";
+import { buildWebSearchDigestFromOutput, collectRetrievedWebSources, parseWebSearchDigestOutput } from "./web-search-digest-agent";
 
 const messages = [
   {
@@ -29,6 +29,14 @@ const messages = [
 ];
 
 describe("web search digest agent", () => {
+  it("extracts a JSON digest from an Agnes text-wrapped response", () => {
+    expect(parseWebSearchDigestOutput(JSON.stringify(`已完成资料整理。</think>\n\n{
+      "stories": [{"headline": "测试新闻"}]
+    }`))).toEqual({
+      stories: [{ headline: "测试新闻" }],
+    });
+  });
+
   it("only binds citations to sources actually read by the Agent", () => {
     const digest = buildWebSearchDigestFromOutput({
       digestDate: "2026-07-27",

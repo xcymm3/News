@@ -65,7 +65,7 @@ pnpm db:deploy
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` | 兼容的模型配置项 | 否 |
 | `NEWS_SOURCE_API_KEY` | 需要密钥的新闻来源预留配置 | 否 |
 | `NEWS_SOURCE_PROVIDER` | 原始新闻来源（默认 `multi-rss-zh`，可选 `un-news-rss`、`gdelt-doc`） | 否 |
-| `WEB_SEARCH_PROVIDER` | 全网搜索供应商标识（`tavily`、`brave`、`serper` 或 `custom`） | 否 |
+| `WEB_SEARCH_PROVIDER` | 全网搜索供应商标识（`bocha`、`tavily`、`brave`、`serper` 或 `custom`） | 否 |
 | `WEB_SEARCH_API_KEY` | 全网搜索 API 密钥 | 否 |
 | `WEB_SEARCH_BASE_URL` | 自定义搜索供应商的 HTTPS 地址 | 否 |
 | `WEB_SEARCH_ALLOWED_DOMAINS` / `WEB_SEARCH_EXCLUDED_DOMAINS` | 逗号分隔的来源域名后缀准入/排除规则 | 否 |
@@ -109,11 +109,11 @@ GET /api/news-source/processed
 
 已定义全网搜索的统一输入、结果和来源准入契约，位于 `src/features/web-search/web-search-contract.ts`。候选网页会统一为标题、摘要、规范 URL、来源域名、发布时间和 `zh-CN` 语言标记；追踪参数会被移除，非 HTTP(S)、本地地址、排除域名或不在允许域名列表内的结果会被拒绝。
 
-第二阶段已安装 LangChain，并提供 `search_web` 与 `fetch_article` 两个服务端工具；Agent 每次运行最多调用 6 次工具。`search_web` 的首个实际适配器为 Tavily：设置 `WEB_SEARCH_PROVIDER="tavily"` 和 `WEB_SEARCH_API_KEY` 后才会请求其 API。`fetch_article` 只读取来源规则允许的 HTTP(S) 网页，移除脚本与样式内容，并限制返回正文长度。API 未配置时会返回明确的“尚未配置全网搜索 API”错误；当前 RSS 正式链路仍未替换。
+第二阶段已安装 LangChain，并提供 `search_web` 与 `fetch_article` 两个服务端工具；Agent 每次运行最多调用 13 次工具（1 次搜索加最多 12 篇原文）。`search_web` 已支持博查与 Tavily：分别设置 `WEB_SEARCH_PROVIDER="bocha"` 或 `"tavily"`，再填入相应供应商的 `WEB_SEARCH_API_KEY`。`fetch_article` 只读取来源规则允许的 HTTP(S) 网页，移除脚本与样式内容，并限制返回正文长度。API 未配置时会返回明确的“尚未配置全网搜索 API”错误；当前 RSS 正式链路仍未替换。
 
 第三阶段的 `web-search-digest-agent.ts` 会将 LangChain 工具记录转换为日报：模型只能引用同一轮中被 `fetch_article` 实际读取的网页，服务端会重新绑定链接并执行现有引用校验。通过校验后，可使用 `generateAndPublishWebSearchDigest` 写入 Neon。
 
-手动“运行 Agent”按钮和 Vercel Cron 已在第四阶段切换到全网搜索链路；单次运行最长 270 秒，失败会记录为 Agent 运行记录并返回区分配置、搜索、模型、引用校验和数据库发布的错误。必须在本地与 Vercel 同时设置 `WEB_SEARCH_PROVIDER="tavily"` 和 `WEB_SEARCH_API_KEY`，否则按钮会明确提示尚未配置全网搜索 API。RSS 相关 API 仍可单独用于检查旧来源，但不再生成或发布首页日报。
+手动“运行 Agent”按钮和 Vercel Cron 已在第四阶段切换到全网搜索链路；单次运行最长 270 秒，失败会记录为 Agent 运行记录并返回区分配置、搜索、模型、引用校验和数据库发布的错误。必须在本地与 Vercel 同时设置 `WEB_SEARCH_PROVIDER="bocha"`（或 `"tavily"`）和对应的 `WEB_SEARCH_API_KEY`，否则按钮会明确提示尚未配置全网搜索 API。RSS 相关 API 仍可单独用于检查旧来源，但不再生成或发布首页日报。
 
 ### 全网搜索渐进上线与评测
 

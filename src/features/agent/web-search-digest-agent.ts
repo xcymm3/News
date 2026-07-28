@@ -10,11 +10,12 @@ import {
   WebSearchConfigurationError,
   type WebSearchCandidate,
 } from "@/features/web-search/web-search-contract";
-import { WebSearchProviderError } from "@/features/web-search/tavily-web-search-provider";
-
-import { createWebResearchAgent } from "./web-research-agent";
+import { WebSearchProviderError } from "@/features/web-search/web-search-provider";
+import { createWebResearchTools } from "@/features/web-search/web-research-tools";
 
 const MAX_WEB_AGENT_STORIES = 12;
+const MAX_RESEARCH_DOCUMENTS = 12;
+const MAX_DOCUMENT_CONTEXT_CHARACTERS = 2_400;
 const LLM_REQUEST_TIMEOUT_MS = 90_000;
 
 type WebDigestStoryOutput = {
@@ -141,19 +142,84 @@ function getMessageText(value: unknown) {
   }).join("\n");
 }
 
-function parseJsonObject(value: string): WebDigestOutput {
-  const normalizedValue = value.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-
+function parseObject(value: string) {
   try {
-    const parsed: unknown = JSON.parse(normalizedValue);
-    if (!isRecord(parsed)) {
-      throw new Error("The response is not an object.");
+    const parsed: unknown = JSON.parse(value);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractStoriesObject(value: string) {
+  const match = /\{\s*"stories"\s*:/.exec(value);
+  if (!match || match.index === undefined) {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = match.index; index < value.length; index += 1) {
+    const character = value[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === '"') {
+        inString = false;
+      }
+      continue;
     }
 
-    return parsed as WebDigestOutput;
-  } catch {
-    throw new WebSearchDigestAgentError("WEB_RESEARCH_INVALID_RESPONSE", 502, "全网研究 Agent 未返回可用的日报 JSON。");
+    if (character === '"') {
+      inString = true;
+    } else if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return value.slice(match.index, index + 1);
+      }
+    }
   }
+
+  return null;
+}
+
+export function parseWebSearchDigestOutput(value: string): WebDigestOutput {
+  const normalizedValue = value.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+  const directlyParsed = parseObject(normalizedValue);
+  if (directlyParsed) {
+    return directlyParsed as WebDigestOutput;
+  }
+
+  const stringWrappedValue = (() => {
+    try {
+      const parsed: unknown = JSON.parse(normalizedValue);
+      return typeof parsed === "string" ? parsed : null;
+    } catch {
+      return null;
+    }
+  })();
+  const candidates = [stringWrappedValue, normalizedValue].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    const storiesObject = extractStoriesObject(candidate);
+    if (!storiesObject) {
+      continue;
+    }
+
+    const parsed = parseObject(storiesObject);
+    if (parsed) {
+      return parsed as WebDigestOutput;
+    }
+  }
+
+  throw new WebSearchDigestAgentError("WEB_RESEARCH_INVALID_RESPONSE", 502, "全网研究 Agent 未返回可用的日报 JSON。");
 }
 
 function getSourceUrls(value: unknown) {
@@ -325,13 +391,63 @@ export function collectRetrievedWebSources(messages: unknown[]): RetrievedWebSou
 
 function createDigestPrompt(digestDate: string) {
   return [
-    `Research the most important Chinese-web developments for ${digestDate}.`,
-    "Call search_web first. Then call fetch_article for every source URL you intend to cite.",
-    "Return only JSON with a stories array of up to 12 distinct items.",
+    `The authoritative application date is ${digestDate}; treat it as the present date for this task.`,
+    `The following are webpages actually retrieved from the Chinese web for ${digestDate}.`,
+    "Return exactly 12 distinct stories when the retrieved material supports it; otherwise return the maximum defensible number.",
     "Each story must include headline, summary, whyItMatters, importanceScore (1-100), and sourceUrls (an array of fetched source URLs).",
     "Write Chinese. Summaries should be self-contained and detailed enough for a reader who will not open the original page.",
-    "Do not cite URLs that were not fetched with fetch_article.",
+    "Do not invent facts, dates, quotations, or URLs. Cite only sourceUrls present in the supplied material.",
   ].join(" ");
+}
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>) {
+  const results: R[] = [];
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await task(items[index]!);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
+async function retrieveWebSources(digestDate: string) {
+  const [searchWeb, fetchArticle] = createWebResearchTools();
+  const searchContent = await searchWeb.invoke({
+    query: `${digestDate} 中国 国际 财经 科技 社会 重要新闻`,
+    maxResults: MAX_RESEARCH_DOCUMENTS,
+  });
+  const searchPayload = parseToolContent(searchContent);
+  const candidates = Array.isArray(searchPayload?.candidates) ? searchPayload.candidates : [];
+  const urls = candidates
+    .filter(isRecord)
+    .map((candidate) => getString(candidate.canonicalUrl))
+    .filter(Boolean)
+    .slice(0, MAX_RESEARCH_DOCUMENTS);
+  const fetchedContents = await mapWithConcurrency(urls, 4, async (url) => fetchArticle.invoke({ url }));
+  const messages = [
+    { name: "search_web", content: searchContent },
+    ...fetchedContents.map((content) => ({ name: "fetch_article", content })),
+  ];
+
+  return collectRetrievedWebSources(messages);
+}
+
+function createSynthesisInput(digestDate: string, sources: RetrievedWebSource[]) {
+  return JSON.stringify({
+    digestDate,
+    sources: sources.map((source) => ({
+      url: source.canonicalUrl,
+      sourceName: source.sourceName,
+      title: source.title,
+      publishedAt: source.publishedAt,
+      text: source.supportingExcerpt.slice(0, MAX_DOCUMENT_CONTEXT_CHARACTERS),
+    })),
+  });
 }
 
 export async function runWebSearchDigest(digestDate: string): Promise<WebSearchDigestRunResult> {
@@ -358,13 +474,16 @@ export async function runWebSearchDigest(digestDate: string): Promise<WebSearchD
   const configuredModel = getConfiguredModel();
 
   try {
-    const agent = createWebResearchAgent(configuredModel.client);
-    const result = await agent.invoke({
-      messages: [{ role: "user", content: createDigestPrompt(digestDate) }],
-    });
-    const finalMessage = result.messages.at(-1);
-    const output = parseJsonObject(getMessageText(getMessageContent(finalMessage)));
-    const retrievedSources = collectRetrievedWebSources(result.messages);
+    const retrievedSources = await retrieveWebSources(digestDate);
+    if (retrievedSources.length === 0) {
+      throw new WebSearchDigestAgentError("WEB_RESEARCH_UNAVAILABLE", 502, "未能读取到可用于生成日报的网页原文。");
+    }
+
+    const finalMessage = await configuredModel.client.invoke([
+      { role: "system", content: createDigestPrompt(digestDate) },
+      { role: "user", content: createSynthesisInput(digestDate, retrievedSources) },
+    ]);
+    const output = parseWebSearchDigestOutput(getMessageText(finalMessage.content));
     const digest = buildWebSearchDigestFromOutput({
       digestDate,
       generatedAt: new Date(),

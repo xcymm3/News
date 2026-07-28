@@ -7,7 +7,7 @@ import {
   type WebSearchProvider,
   type WebSourcePolicy,
 } from "./web-search-contract";
-import { createConfiguredWebSearchProvider, WebSearchProviderError } from "./tavily-web-search-provider";
+import { createConfiguredWebSearchProvider, WebSearchProviderError } from "./web-search-provider";
 
 const ARTICLE_REQUEST_TIMEOUT_MS = 12_000;
 const MAX_ARTICLE_CHARACTERS = 24_000;
@@ -129,10 +129,23 @@ export function createWebResearchTools(options: {
   );
 
   const fetchArticle = tool(
-    async ({ url }) => JSON.stringify(await fetchArticleText(url, {
-      fetchImplementation: options.fetchImplementation,
-      policy,
-    })),
+    async ({ url }) => {
+      try {
+        return JSON.stringify(await fetchArticleText(url, {
+          fetchImplementation: options.fetchImplementation,
+          policy,
+        }));
+      } catch (error) {
+        if (error instanceof WebSearchProviderError) {
+          return JSON.stringify({
+            canonicalUrl: url,
+            error: error.message,
+          });
+        }
+
+        throw error;
+      }
+    },
     {
       name: "fetch_article",
       description: "读取已搜索到的候选网页正文。只能读取符合来源准入规则的 HTTP(S) 网页。",
@@ -142,5 +155,5 @@ export function createWebResearchTools(options: {
     },
   );
 
-  return [searchWeb, fetchArticle];
+  return [searchWeb, fetchArticle] as const;
 }

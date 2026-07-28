@@ -1,4 +1,4 @@
-export const WEB_SEARCH_PROVIDERS = ["tavily", "brave", "serper", "custom"] as const;
+export const WEB_SEARCH_PROVIDERS = ["tavily", "bocha", "brave", "serper", "custom"] as const;
 
 export type WebSearchProviderId = (typeof WEB_SEARCH_PROVIDERS)[number];
 
