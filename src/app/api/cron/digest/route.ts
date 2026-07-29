@@ -51,14 +51,14 @@ export async function GET(request: Request) {
 
   try {
     const rollout = getWebSearchRollout();
-    if (!canRunWebSearch(rollout, "cron")) {
+    if (!canRunWebSearch(rollout)) {
       return noStoreJson({
         data: {
           skipped: true,
         },
         meta: {
           rollout,
-          reason: getWebSearchRolloutMessage(rollout, "cron"),
+          reason: getWebSearchRolloutMessage(rollout),
         },
       });
     }
