@@ -69,8 +69,8 @@ describe("createGroundedStoryAnswer", () => {
         headers: expect.objectContaining({ Authorization: "Bearer question-key" }),
       }),
     );
-    expect(request.messages[0]?.content).toContain("可以直接解释稳定的通用知识");
-    expect(request.messages[0]?.content).toContain("不要默认建议用户查看 RSS 链接");
+    expect(request.messages[0]?.content).toContain("使用你已有的通用知识直接解释");
+    expect(request.messages[0]?.content).toContain("不要默认建议查看 RSS 链接");
     expect(request.messages[1]?.content).toContain("测试新闻标题");
     expect(request.messages[1]?.content).toContain("https://example.test/news/1");
     expect(request.messages[1]?.content).not.toContain("不应发送给模型的原文摘录");
