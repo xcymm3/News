@@ -87,7 +87,7 @@ pnpm db:deploy
 
 ### 自动日报
 
-生产环境由 Vercel Cron 每天 UTC `00:10`（北京时间 `08:10`）调用 `/api/cron/digest`。在 Vercel 的 Production 环境中设置 `CRON_SECRET`，并同时设置 `DATABASE_URL` 和 AI 服务环境变量；接口只接受 `Authorization: Bearer <CRON_SECRET>` 的请求。当天已有已发布日报时，定时任务会安全跳过，首页继续读取数据库中的已发布版本。手动“运行 Agent”按钮仍会保留，并会发布一个新的日报版本用于测试。
+生产环境由 Vercel Cron 每天 UTC `02:00`（北京时间 `10:00`）调用 `/api/cron/digest`。在 Vercel 的 Production 环境中设置 `CRON_SECRET`，并同时设置 `DATABASE_URL` 和 AI 服务环境变量；接口只接受 `Authorization: Bearer <CRON_SECRET>` 的请求。当天已有已发布日报时，定时任务会安全跳过，首页继续读取数据库中的已发布版本。手动“运行 Agent”按钮仍会保留，并会发布一个新的日报版本用于测试。
 
 ## 实时新闻输入
 
