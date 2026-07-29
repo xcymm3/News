@@ -7,17 +7,16 @@ import {
 } from "./web-search-rollout";
 
 describe("web search rollout", () => {
-  it("defaults to manual testing so scheduled runs do not consume quota", () => {
+  it("defaults to the scheduled daily run", () => {
     const rollout = getWebSearchRollout({});
 
-    expect(rollout).toBe("manual");
-    expect(canRunWebSearch(rollout, "manual")).toBe(true);
-    expect(canRunWebSearch(rollout, "cron")).toBe(false);
+    expect(rollout).toBe("full");
+    expect(canRunWebSearch(rollout)).toBe(true);
   });
 
   it("only enables cron after the full rollout is selected", () => {
-    expect(canRunWebSearch(getWebSearchRollout({ WEB_SEARCH_ROLLOUT: "full" }), "cron")).toBe(true);
-    expect(canRunWebSearch(getWebSearchRollout({ WEB_SEARCH_ROLLOUT: "disabled" }), "manual")).toBe(false);
+    expect(canRunWebSearch(getWebSearchRollout({ WEB_SEARCH_ROLLOUT: "full" }))).toBe(true);
+    expect(canRunWebSearch(getWebSearchRollout({ WEB_SEARCH_ROLLOUT: "disabled" }))).toBe(false);
   });
 
   it("rejects an invalid rollout value", () => {

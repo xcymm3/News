@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { AgentRefreshButton } from "@/features/agent/agent-refresh-button";
 import { DigestNotFoundError, digestService } from "@/features/digest/digest-service";
 import styles from "./page.module.css";
 
@@ -51,14 +50,12 @@ export default async function Home() {
             <p className={styles.strapline}>全球动向 · 每日更新 · 等待发布</p>
           </header>
 
-          <AgentRefreshButton />
-
           <main className={styles.unavailable} id="main-content">
             <p className={styles.unavailableEyebrow}>日报暂不可用</p>
             <h2 className={styles.unavailableTitle}>{isMissingDigest ? "今日日报尚未生成" : "暂时无法读取数据库日报"}</h2>
             <p className={styles.unavailableText}>
               {isMissingDigest
-                ? "请使用上方“运行 Agent”生成今天的首个日报。"
+                ? "日报将在每日零点由系统自动生成，请稍后刷新查看。"
                 : "请稍后刷新页面；若问题持续，请检查数据库连接配置。"}
             </p>
           </main>
