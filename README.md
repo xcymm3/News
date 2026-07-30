@@ -16,19 +16,19 @@
 
 ```mermaid
 flowchart LR
-  cron["Vercel Cron"] --> route["/api/cron/digest"]
-  route --> agent["Web Research Agent"]
-  agent --> search["Search Provider: Bocha / Tavily"]
-  agent --> fetch["Fetch & Clean Articles"]
-  search --> cluster["Event Clustering"]
+  cron["Vercel 定时任务"] --> route["定时任务接口"]
+  route --> agent["联网研究 Agent"]
+  agent --> search["搜索服务：博查 / Tavily"]
+  agent --> fetch["读取并清洗原文"]
+  search --> cluster["事件聚类"]
   fetch --> cluster
   cluster --> gate{"至少 2 个独立域名？"}
-  gate -->|通过| llm["DeepSeek Synthesis"]
-  gate -->|未通过| discard["Discard"]
-  llm --> validate["Citation Validation"]
-  validate --> db[("Neon PostgreSQL")]
-  db --> web["Next.js Dashboard"]
-  web --> chat["Contextual AI Q&A"]
+  gate -->|通过| llm["DeepSeek 综合摘要"]
+  gate -->|未通过| discard["丢弃"]
+  llm --> validate["引用校验"]
+  validate --> db[("Neon 数据库")]
+  db --> web["Next.js 工作台"]
+  web --> chat["上下文 AI 追问"]
 ```
 
 ## 技术栈
