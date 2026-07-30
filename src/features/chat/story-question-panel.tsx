@@ -10,7 +10,6 @@ import styles from "./story-question-panel.module.css";
 
 type StoryQuestionPanelProps = {
   storyId: string;
-  isDemoData: boolean;
 };
 
 type AnswerBlock =
@@ -186,7 +185,7 @@ function makeMessageId(role: StoryChatMessage["role"]) {
   return `${role}-${crypto.randomUUID()}`;
 }
 
-export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelProps) {
+export function StoryQuestionPanel({ storyId }: StoryQuestionPanelProps) {
   const dockInputId = useId();
   const inputId = useId();
   const hintId = useId();
@@ -496,10 +495,10 @@ export function StoryQuestionPanel({ storyId, isDemoData }: StoryQuestionPanelPr
                   ))}
                 </ol>
               ) : (
-                <div className={styles.emptyState}>
-                  <p>问背景、概念或这条新闻的后续影响。</p>
-                  <p>{isDemoData ? "演示新闻的事实以本页内容为准。" : "当前新闻的事实以 RSS 材料为准。"}</p>
-                </div>
+              <div className={styles.emptyState}>
+                <p>问背景、概念或这条新闻的后续影响。</p>
+                  <p>会根据当前新闻材料回答。</p>
+              </div>
               )}
             </div>
 

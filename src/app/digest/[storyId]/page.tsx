@@ -121,7 +121,7 @@ export default async function StoryDetailPage({
           </section>
         </article>
       </main>
-      <StoryQuestionPanel isDemoData={digest.isDemoData} key={story.id} storyId={story.id} />
+      <StoryQuestionPanel key={story.id} storyId={story.id} />
     </div>
   );
 }

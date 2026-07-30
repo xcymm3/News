@@ -70,6 +70,8 @@ describe("createGroundedStoryAnswer", () => {
       }),
     );
     expect(request.messages[0]?.content).toContain("使用你已有的通用知识直接解释");
+    expect(request.messages[0]?.content).toContain("不要让用户自行搜索");
+    expect(request.messages[0]?.content).toContain("明确标注推测");
     expect(request.messages[0]?.content).toContain("不要默认建议查看 RSS 链接");
     expect(request.messages[1]?.content).toContain("测试新闻标题");
     expect(request.messages[1]?.content).toContain("https://example.test/news/1");
