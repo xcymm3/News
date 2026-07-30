@@ -4,6 +4,12 @@
 
 **在线访问：项目已部署至 [news.xcymm3.top](https://news.xcymm3.top/)。**
 
+## 界面预览
+
+| 首页 | 事件详情 | AI 上下文追问 |
+| --- | --- | --- |
+| ![日报首页](./docs/screenshots/homepage.png) | ![事件详情页](./docs/screenshots/story-detail.png) | ![AI 上下文追问](./docs/screenshots/ai-questioning.png) |
+
 ## 核心能力
 
 - **联网研究流水线**：通过 LangChain 工具执行网页搜索与原文读取，支持博查（Bocha）和 Tavily 搜索提供商。
