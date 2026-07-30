@@ -72,7 +72,7 @@ export default async function Home() {
       <div className={styles.shell}>
         <header className={styles.masthead}>
           <div className={styles.mastheadContent}>
-            <p className={styles.eyebrow}>由 DeepSeek 总结生成 · {formatBriefDate(digest.publishedAt)}更新</p>
+            <p className={styles.eyebrow}>由 DeepSeek 总结生成 · 每日0点自动更新 · 当前日期：{formatBriefDate(digest.publishedAt)}</p>
             <h1 className={styles.wordmark}>今日新闻速览</h1>
           </div>
         </header>
