@@ -4,7 +4,7 @@ import {
   type StoryQuestionTurn,
 } from "@/features/chat/story-question-service";
 import type { StoryChatAnswer } from "@/features/chat/types";
-import { digestService } from "@/features/digest/digest-service";
+import { DigestStoryNotFoundError, digestService } from "@/features/digest/digest-service";
 import type { DigestStory } from "@/features/digest/types";
 
 export const runtime = "nodejs";
@@ -58,9 +58,12 @@ async function findCurrentStory(storyId: string) {
 
   for (let attempt = 1; attempt <= STORY_LOOKUP_ATTEMPTS; attempt += 1) {
     try {
-      const digest = await digestService.getTodayDigest();
-      return digest.stories.find((item) => item.id === storyId) ?? null;
+      return await digestService.getTodayStory(storyId);
     } catch (error) {
+      if (error instanceof DigestStoryNotFoundError) {
+        return null;
+      }
+
       lastError = error;
 
       if (attempt < STORY_LOOKUP_ATTEMPTS) {

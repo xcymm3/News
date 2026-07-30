@@ -18,13 +18,9 @@ export function getPrismaClient() {
     throw new Error("DATABASE_URL is required to access the news database.");
   }
 
-  const prisma = new PrismaClient({
+  prismaGlobal.__newsPrismaClient = new PrismaClient({
     adapter: new PrismaPg({ connectionString }),
   });
 
-  if (process.env.NODE_ENV !== "production") {
-    prismaGlobal.__newsPrismaClient = prisma;
-  }
-
-  return prisma;
+  return prismaGlobal.__newsPrismaClient;
 }

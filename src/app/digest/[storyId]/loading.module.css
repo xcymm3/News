@@ -1,0 +1,135 @@
+.page {
+  min-block-size: 100dvh;
+  background: var(--color-paper);
+}
+
+.shell {
+  inline-size: min(100%, 50rem);
+  margin-inline: auto;
+  padding: var(--space-sm) var(--page-gutter) calc(var(--space-3xl) + 5rem);
+}
+
+.article {
+  padding-block-start: var(--space-lg);
+}
+
+.header {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-xl) 0 var(--space-lg);
+}
+
+.summary {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: var(--rule-hair) solid var(--color-rule);
+  border-radius: var(--radius-lg);
+  background: var(--color-paper-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.sources {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-lg) 0 var(--space-xl);
+}
+
+.sourceRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--color-paper-muted);
+}
+
+.skeleton::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, color-mix(in oklch, var(--color-paper-raised) 76%, transparent) 50%, transparent 80%);
+  content: "";
+  transform: translateX(-100%);
+  animation: shimmer 1.35s var(--ease-out) infinite;
+}
+
+.utility {
+  block-size: 3.25rem;
+  border: var(--rule-hair) solid var(--color-rule);
+  border-radius: var(--radius-sm);
+}
+
+.meta,
+.sourcesLabel {
+  block-size: 0.75rem;
+  inline-size: 6.5rem;
+}
+
+.title {
+  block-size: clamp(2.5rem, 8vw, 4.25rem);
+  inline-size: min(100%, 38rem);
+}
+
+.titleShort {
+  block-size: clamp(2.5rem, 8vw, 4.25rem);
+  inline-size: min(74%, 27rem);
+}
+
+.line {
+  block-size: 1.1rem;
+  inline-size: 100%;
+}
+
+.lineMedium {
+  block-size: 1.1rem;
+  inline-size: 86%;
+}
+
+.lineShort {
+  block-size: 1.1rem;
+  inline-size: 58%;
+}
+
+.source,
+.sourceShort {
+  block-size: 2.5rem;
+  border-radius: var(--radius-pill);
+}
+
+.source {
+  inline-size: 6.5rem;
+}
+
+.sourceShort {
+  inline-size: 5rem;
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (min-width: 40rem) {
+  .shell {
+    padding-block-start: var(--space-md);
+  }
+
+  .header {
+    padding-block: var(--space-2xl) var(--space-xl);
+  }
+
+  .summary {
+    padding: var(--space-xl);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+  }
+}

@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { createDigestService, DigestNotFoundError, type DigestRepository } from "./digest-service";
-import type { DailyDigest } from "./types";
+import {
+  createDigestService,
+  DigestNotFoundError,
+  type DigestRepository,
+} from "./digest-service";
+import type { DailyDigest, DigestStory } from "./types";
+
+const fallbackStory: DigestStory = {
+  id: "story-1",
+  position: 1,
+  headline: "测试事件",
+  summary: "测试摘要",
+  whyItMatters: "测试影响",
+  importanceScore: 80,
+  updatedAt: "2026-07-23T12:00:00.000Z",
+  citations: [],
+};
 
 const fallbackDigest: DailyDigest = {
   id: "demo-digest-test",
@@ -9,7 +24,7 @@ const fallbackDigest: DailyDigest = {
   revision: 1,
   publishedAt: "2026-07-23T12:00:00.000Z",
   isDemoData: true,
-  stories: [],
+  stories: [fallbackStory],
 };
 
 describe("createDigestService", () => {
@@ -31,5 +46,20 @@ describe("createDigestService", () => {
     };
 
     await expect(createDigestService(repository).getDigestByDate("2026-07-23")).rejects.toBeInstanceOf(DigestNotFoundError);
+  });
+
+  it("uses the targeted story query when the repository supports it", async () => {
+    const repository: DigestRepository = {
+      async findPublishedByDate() {
+        throw new Error("The full digest query should not run.");
+      },
+      async findPublishedStoryByDate(digestDate, storyId) {
+        return digestDate === "2026-07-23" && storyId === fallbackStory.id ? fallbackStory : null;
+      },
+    };
+
+    await expect(
+      createDigestService(repository).getTodayStory(fallbackStory.id, new Date("2026-07-23T04:00:00.000Z")),
+    ).resolves.toEqual(fallbackStory);
   });
 });

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { unstable_cache } from "next/cache";
 
 import {
   AgentRunStatus,
@@ -81,6 +82,41 @@ function toCitation(article: {
   };
 }
 
+type DatabaseDigestItem = {
+  position: number;
+  headlineSnapshot: string;
+  summarySnapshot: string;
+  impactSnapshot: string;
+  story: {
+    id: string;
+    importanceScore: number;
+    updatedAt: Date;
+    clusterArticles: Array<{
+      article: {
+        id: string;
+        canonicalUrl: string;
+        publishedAt: Date;
+        excerpt: string | null;
+        title: string;
+        source: { name: string };
+      };
+    }>;
+  };
+};
+
+function mapDatabaseStory(item: DatabaseDigestItem): DigestStory {
+  return {
+    id: item.story.id,
+    position: item.position,
+    headline: item.headlineSnapshot,
+    summary: item.summarySnapshot,
+    whyItMatters: item.impactSnapshot,
+    importanceScore: item.story.importanceScore,
+    updatedAt: item.story.updatedAt.toISOString(),
+    citations: item.story.clusterArticles.map((link) => toCitation(link.article)),
+  };
+}
+
 function mapDatabaseDigest(digest: {
   id: string;
   digestDate: Date;
@@ -89,27 +125,7 @@ function mapDatabaseDigest(digest: {
   notice: string | null;
   publishedAt: Date | null;
   createdAt: Date;
-  items: Array<{
-    position: number;
-    headlineSnapshot: string;
-    summarySnapshot: string;
-    impactSnapshot: string;
-    story: {
-      id: string;
-      importanceScore: number;
-      updatedAt: Date;
-      clusterArticles: Array<{
-        article: {
-          id: string;
-          canonicalUrl: string;
-          publishedAt: Date;
-          excerpt: string | null;
-          title: string;
-          source: { name: string };
-        };
-      }>;
-    };
-  }>;
+  items: DatabaseDigestItem[];
 }): DailyDigest {
   return {
     id: digest.id,
@@ -119,16 +135,7 @@ function mapDatabaseDigest(digest: {
     isDemoData: false,
     generationMode: digest.generationMode === "agent" ? "agent" : "rules",
     notice: digest.notice ?? undefined,
-    stories: digest.items.map((item): DigestStory => ({
-      id: item.story.id,
-      position: item.position,
-      headline: item.headlineSnapshot,
-      summary: item.summarySnapshot,
-      whyItMatters: item.impactSnapshot,
-      importanceScore: item.story.importanceScore,
-      updatedAt: item.story.updatedAt.toISOString(),
-      citations: item.story.clusterArticles.map((link) => toCitation(link.article)),
-    })),
+    stories: digest.items.map(mapDatabaseStory),
   };
 }
 
@@ -174,30 +181,28 @@ async function persistCitation(
   });
 }
 
-export const prismaDigestRepository: DigestRepository = {
-  async findPublishedByDate(digestDate) {
-    const digest = await getPrismaClient().digest.findFirst({
-      where: {
-        digestDate: digestDateToDatabaseDate(digestDate),
-        status: DigestStatus.PUBLISHED,
-      },
-      orderBy: {
-        revision: "desc",
-      },
-      include: {
-        items: {
-          orderBy: {
-            position: "asc",
-          },
-          include: {
-            story: {
-              include: {
-                clusterArticles: {
-                  include: {
-                    article: {
-                      include: {
-                        source: true,
-                      },
+async function findPublishedByDate(digestDate: string) {
+  const digest = await getPrismaClient().digest.findFirst({
+    where: {
+      digestDate: digestDateToDatabaseDate(digestDate),
+      status: DigestStatus.PUBLISHED,
+    },
+    orderBy: {
+      revision: "desc",
+    },
+    include: {
+      items: {
+        orderBy: {
+          position: "asc",
+        },
+        include: {
+          story: {
+            include: {
+              clusterArticles: {
+                include: {
+                  article: {
+                    include: {
+                      source: true,
                     },
                   },
                 },
@@ -206,10 +211,61 @@ export const prismaDigestRepository: DigestRepository = {
           },
         },
       },
-    });
+    },
+  });
 
-    return digest ? mapDatabaseDigest(digest) : null;
-  },
+  return digest ? mapDatabaseDigest(digest) : null;
+}
+
+async function findPublishedStoryByDate(digestDate: string, storyId: string) {
+  const item = await getPrismaClient().digestItem.findFirst({
+    where: {
+      storyId,
+      digest: {
+        digestDate: digestDateToDatabaseDate(digestDate),
+        status: DigestStatus.PUBLISHED,
+      },
+    },
+    include: {
+      story: {
+        include: {
+          clusterArticles: {
+            include: {
+              article: {
+                include: {
+                  source: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return item ? mapDatabaseStory(item) : null;
+}
+
+const getCachedPublishedDigest = unstable_cache(
+  findPublishedByDate,
+  ["published-digest"],
+  { revalidate: 60 },
+);
+
+const getCachedPublishedStory = unstable_cache(
+  findPublishedStoryByDate,
+  ["published-digest-story"],
+  { revalidate: 60 },
+);
+
+export const prismaDigestRepository: DigestRepository = {
+  findPublishedByDate,
+  findPublishedStoryByDate,
+};
+
+export const cachedPrismaDigestRepository: DigestRepository = {
+  findPublishedByDate: getCachedPublishedDigest,
+  findPublishedStoryByDate: getCachedPublishedStory,
 };
 
 export async function publishDigest(digest: DailyDigest, options: PublishDigestOptions) {

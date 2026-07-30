@@ -1,5 +1,5 @@
-import { prismaDigestRepository } from "./prisma-digest-repository";
-import type { DailyDigest } from "./types";
+import { cachedPrismaDigestRepository } from "./prisma-digest-repository";
+import type { DailyDigest, DigestStory } from "./types";
 
 const ASIA_SHANGHAI_TIME_ZONE = "Asia/Shanghai";
 const DIGEST_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -18,13 +18,22 @@ export class DigestNotFoundError extends Error {
   }
 }
 
+export class DigestStoryNotFoundError extends Error {
+  constructor(storyId: string) {
+    super(`No published story exists for ${storyId}.`);
+    this.name = "DigestStoryNotFoundError";
+  }
+}
+
 export interface DigestRepository {
   findPublishedByDate(digestDate: string): Promise<DailyDigest | null>;
+  findPublishedStoryByDate?(digestDate: string, storyId: string): Promise<DigestStory | null>;
 }
 
 export interface DigestService {
   getTodayDigest(now?: Date): Promise<DailyDigest>;
   getDigestByDate(digestDate: string): Promise<DailyDigest>;
+  getTodayStory(storyId: string, now?: Date): Promise<DigestStory>;
 }
 
 function assertValidDigestDate(digestDate: string) {
@@ -74,12 +83,29 @@ export function createDigestService(repository: DigestRepository): DigestService
     return digest;
   };
 
+  const getStoryByDate = async (digestDate: string, storyId: string) => {
+    assertValidDigestDate(digestDate);
+
+    const story = repository.findPublishedStoryByDate
+      ? await repository.findPublishedStoryByDate(digestDate, storyId)
+      : (await getDigestByDate(digestDate)).stories.find((item) => item.id === storyId) ?? null;
+
+    if (!story) {
+      throw new DigestStoryNotFoundError(storyId);
+    }
+
+    return story;
+  };
+
   return {
     async getTodayDigest(now = new Date()) {
       return getDigestByDate(formatShanghaiDate(now));
     },
     getDigestByDate,
+    async getTodayStory(storyId, now = new Date()) {
+      return getStoryByDate(formatShanghaiDate(now), storyId);
+    },
   };
 }
 
-export const digestService = createDigestService(prismaDigestRepository);
+export const digestService = createDigestService(cachedPrismaDigestRepository);

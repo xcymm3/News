@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { StoryQuestionPanel } from "@/features/chat/story-question-panel";
-import { digestService } from "@/features/digest/digest-service";
+import { DigestStoryNotFoundError, digestService } from "@/features/digest/digest-service";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -74,11 +74,16 @@ export default async function StoryDetailPage({
   params: Promise<{ storyId: string }>;
 }) {
   const { storyId } = await params;
-  const digest = await digestService.getTodayDigest();
-  const story = digest.stories.find((item) => item.id === storyId);
+  let story;
 
-  if (!story) {
-    notFound();
+  try {
+    story = await digestService.getTodayStory(storyId);
+  } catch (error) {
+    if (error instanceof DigestStoryNotFoundError) {
+      notFound();
+    }
+
+    throw error;
   }
 
   const sourceCitations = [...new Map(story.citations.map((citation) => [citation.sourceName, citation])).values()];
