@@ -74,6 +74,14 @@ export default async function Home() {
           <div className={styles.mastheadContent}>
             <p className={styles.eyebrow}>由 DeepSeek 总结生成 · 每日0点自动更新 · 当前日期：{formatBriefDate(digest.publishedAt)}</p>
             <h1 className={styles.wordmark}>今日新闻速览</h1>
+            <a
+              className={styles.projectLink}
+              href="https://github.com/xcymm3/News"
+              rel="noreferrer"
+              target="_blank"
+            >
+              GitHub 项目地址：xcymm3/News
+            </a>
           </div>
         </header>
 

@@ -130,6 +130,21 @@
   overflow-wrap: anywhere;
 }
 
+.projectLink {
+  inline-size: fit-content;
+  color: var(--color-ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.025em;
+  line-height: 1.45;
+  text-decoration-color: color-mix(in oklch, currentcolor 40%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+.projectLink:hover {
+  color: var(--color-accent);
+}
+
 .strapline {
   max-inline-size: 34rem;
   margin: 0;
