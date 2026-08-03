@@ -9,10 +9,8 @@ import { getPrismaClient } from "@/lib/prisma";
 
 import type {
   AgentObservabilitySnapshot,
-  AgentQualityEvaluationSnapshot,
   AgentRunHistoryItem,
   AgentRunSnapshot,
-  AgentRunStageSnapshot,
 } from "./agent-observability-contract";
 
 export type {

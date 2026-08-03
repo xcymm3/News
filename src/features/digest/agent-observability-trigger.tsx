@@ -348,12 +348,6 @@ export function AgentObservabilityTrigger() {
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      void loadSnapshot(true);
-    }
-  }, [isOpen, loadSnapshot]);
-
-  useEffect(() => {
     if (!isOpen || snapshot?.latestRun?.status !== "running") {
       return undefined;
     }
@@ -370,6 +364,7 @@ export function AgentObservabilityTrigger() {
       dialogRef.current?.showModal();
     }
     setIsOpen(true);
+    void loadSnapshot(true);
   };
 
   const closeDialog = () => {
