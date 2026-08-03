@@ -2,9 +2,11 @@ import { createHash } from "node:crypto";
 
 import { ChatOpenAI } from "@langchain/openai";
 
+import { evaluateAgentRunQuality } from "@/features/digest/agent-run-quality-evaluation";
 import { validateGeneratedDigest } from "@/features/digest/live-digest-generator";
 import {
   publishDigest,
+  recordAgentRunQualityEvaluation,
   startAgentRunTracker,
   type AgentRunStageKey,
   type AgentRunTracker,
@@ -712,6 +714,12 @@ export async function generateAndPublishWebSearchDigest(
         retrievedDocumentCount: result.retrievedDocumentCount,
         agentRunId: tracker?.agentRunId,
       });
+      if (tracker) {
+        await recordAgentRunQualityEvaluation({
+          agentRunId: tracker.agentRunId,
+          evaluation: evaluateAgentRunQuality(digest),
+        });
+      }
       await tracker?.completeStage("PUBLISH", { outputCount: digest.stories.length });
 
       return {

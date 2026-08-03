@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { DigestNotFoundError, digestService } from "@/features/digest/digest-service";
+import { getStoryCategory } from "@/features/digest/story-category";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -11,22 +12,6 @@ function formatBriefDate(isoDate: string) {
     day: "numeric",
     timeZone: "Asia/Shanghai",
   }).format(new Date(isoDate));
-}
-
-function getStoryCategory(headline: string) {
-  if (/人工智能|\bAI\b|芯片|机器人|科技|数字经济/i.test(headline)) {
-    return "科技";
-  }
-
-  if (/市场|经济|贸易|金融|外汇|货币|央行|原油|投资|股市|价格|汇率/i.test(headline)) {
-    return "财经";
-  }
-
-  if (/外交|国际|联合国|东盟|中东|美国|欧洲|乌克兰|伊朗|以色列|俄罗斯|全球/i.test(headline)) {
-    return "国际";
-  }
-
-  return "时事";
 }
 
 export default async function Home() {

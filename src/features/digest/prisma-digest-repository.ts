@@ -14,6 +14,7 @@ import {
 } from "@/generated/prisma/client";
 import { getPrismaClient } from "@/lib/prisma";
 
+import type { AgentRunQualityEvaluation } from "./agent-run-quality-evaluation";
 import type { DigestRepository } from "./digest-service";
 import type { DailyDigest, DigestCitation, DigestStory } from "./types";
 
@@ -208,6 +209,43 @@ export async function startAgentRunTracker({
   } catch (error) {
     logObservabilityWriteError("start Agent run", error);
     return null;
+  }
+}
+
+export async function recordAgentRunQualityEvaluation({
+  agentRunId,
+  evaluation,
+}: {
+  agentRunId: string;
+  evaluation: AgentRunQualityEvaluation;
+}) {
+  try {
+    await getPrismaClient().agentRunQualityEvaluation.upsert({
+      where: { agentRunId },
+      update: {
+        evaluationVersion: evaluation.evaluationVersion,
+        freshnessScore: evaluation.freshnessScore,
+        multiSourceCoverage: evaluation.multiSourceCoverage,
+        averageSourcesPerStory: evaluation.averageSourcesPerStory,
+        sourceDomainCount: evaluation.sourceDomainCount,
+        categoryCoverage: evaluation.categoryCoverage,
+        duplicateFreeRate: evaluation.duplicateFreeRate,
+        citationUrlValidity: evaluation.citationUrlValidity,
+      },
+      create: {
+        agentRunId,
+        evaluationVersion: evaluation.evaluationVersion,
+        freshnessScore: evaluation.freshnessScore,
+        multiSourceCoverage: evaluation.multiSourceCoverage,
+        averageSourcesPerStory: evaluation.averageSourcesPerStory,
+        sourceDomainCount: evaluation.sourceDomainCount,
+        categoryCoverage: evaluation.categoryCoverage,
+        duplicateFreeRate: evaluation.duplicateFreeRate,
+        citationUrlValidity: evaluation.citationUrlValidity,
+      },
+    });
+  } catch (error) {
+    logObservabilityWriteError("record Agent quality evaluation", error);
   }
 }
 
