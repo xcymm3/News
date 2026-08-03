@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AgentObservabilityTrigger } from "@/features/digest/agent-observability-trigger";
 import { DigestNotFoundError, digestService } from "@/features/digest/digest-service";
 import { getStoryCategory } from "@/features/digest/story-category";
 import styles from "./page.module.css";
@@ -67,6 +68,7 @@ export default async function Home() {
             >
               GitHub 项目地址：xcymm3/News
             </a>
+            <AgentObservabilityTrigger />
           </div>
         </header>
 
