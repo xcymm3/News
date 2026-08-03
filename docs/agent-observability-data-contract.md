@@ -105,11 +105,13 @@ type AgentObservabilitySnapshot = {
 type AgentRunHistoryItem = {
   id: string;
   digestDate: string;
+  trigger: "manual" | "cron";
   status: "running" | "succeeded" | "failed";
   startedAt: string;
   completedAt?: string;
   totalDurationMs?: number;
   publishedStoryCount?: number;
+  evaluation?: Pick<AgentQualityEvaluation, "freshnessScore" | "multiSourceCoverage" | "duplicateFreeRate">;
 };
 
 type AgentQualityEvaluation = {
