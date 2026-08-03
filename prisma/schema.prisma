@@ -66,6 +66,22 @@ enum AgentRunStatus {
   FAILED
 }
 
+enum AgentRunStageName {
+  SEARCH
+  CLUSTER
+  FETCH
+  SYNTHESIZE
+  VALIDATE
+  PUBLISH
+}
+
+enum AgentRunStageStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
 model NewsSource {
   id         String     @id @default(uuid())
   name       String
@@ -170,15 +186,15 @@ model ClaimCitation {
 }
 
 model Digest {
-  id          String       @id @default(uuid())
-  digestDate  DateTime     @db.Date
-  revision    Int
-  status      DigestStatus @default(DRAFT)
+  id             String       @id @default(uuid())
+  digestDate     DateTime     @db.Date
+  revision       Int
+  status         DigestStatus @default(DRAFT)
   generationMode String?
-  notice      String?
-  publishedAt DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  notice         String?
+  publishedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   items     DigestItem[]
   agentRuns AgentRun[]
@@ -200,10 +216,53 @@ model AgentRun {
   startedAt              DateTime        @default(now())
   completedAt            DateTime?
 
-  digest Digest? @relation(fields: [digestId], references: [id], onDelete: SetNull)
+  digest            Digest?                    @relation(fields: [digestId], references: [id], onDelete: SetNull)
+  stages            AgentRunStage[]
+  qualityEvaluation AgentRunQualityEvaluation?
 
   @@index([digestDate, status])
   @@index([startedAt])
+}
+
+model AgentRunStage {
+  id           String              @id @default(uuid())
+  agentRunId   String
+  stage        AgentRunStageName
+  position     Int
+  status       AgentRunStageStatus @default(RUNNING)
+  inputCount   Int?
+  outputCount  Int?
+  durationMs   Int?
+  details      Json?
+  errorMessage String?
+  startedAt    DateTime            @default(now())
+  completedAt  DateTime?
+
+  agentRun AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@unique([agentRunId, stage])
+  @@unique([agentRunId, position])
+  @@index([agentRunId, position])
+  @@index([stage, status])
+}
+
+model AgentRunQualityEvaluation {
+  id                     String   @id @default(uuid())
+  agentRunId             String   @unique
+  evaluationVersion      String
+  freshnessScore         Float
+  multiSourceCoverage    Float
+  averageSourcesPerStory Float
+  sourceDomainCount      Int
+  categoryCoverage       Float
+  duplicateFreeRate      Float
+  citationUrlValidity    Float
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  agentRun AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationVersion])
 }
 
 model DigestItem {
