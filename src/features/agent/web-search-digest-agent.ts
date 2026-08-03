@@ -3,7 +3,12 @@ import { createHash } from "node:crypto";
 import { ChatOpenAI } from "@langchain/openai";
 
 import { validateGeneratedDigest } from "@/features/digest/live-digest-generator";
-import { publishDigest } from "@/features/digest/prisma-digest-repository";
+import {
+  publishDigest,
+  startAgentRunTracker,
+  type AgentRunStageKey,
+  type AgentRunTracker,
+} from "@/features/digest/prisma-digest-repository";
 import type { DailyDigest, DigestCitation, DigestStory } from "@/features/digest/types";
 import {
   getWebSearchConfig,
@@ -424,6 +429,27 @@ async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, task
   return results;
 }
 
+async function runObservedStage<T>(
+  tracker: AgentRunTracker | null | undefined,
+  stage: AgentRunStageKey,
+  inputCount: number,
+  task: () => Promise<T>,
+  getCompletion: (result: T) => { outputCount: number; details?: Record<string, string | number | boolean | null> },
+  details?: Record<string, string | number | boolean | null>,
+) {
+  await tracker?.startStage(stage, { inputCount, details });
+
+  try {
+    const result = await task();
+    const completion = getCompletion(result);
+    await tracker?.completeStage(stage, completion);
+    return result;
+  } catch (error) {
+    await tracker?.failStage(stage, error);
+    throw error;
+  }
+}
+
 function getSearchCandidates(content: string) {
   const payload = parseToolContent(content);
 
@@ -460,33 +486,71 @@ function toRetrievedSource(candidate: WebSearchCandidate, content: string): Retr
   };
 }
 
-async function retrieveEventClusters(digestDate: string): Promise<RetrievedEventCluster[]> {
+async function retrieveEventClusters(
+  digestDate: string,
+  tracker?: AgentRunTracker | null,
+): Promise<RetrievedEventCluster[]> {
   const [searchWeb, fetchArticle] = createWebResearchTools();
-  const searchContents = await mapWithConcurrency(INTERNATIONAL_RESEARCH_TOPICS, 2, async (topic) => searchWeb.invoke({
-    query: `${digestDate} ${topic}`,
-    maxResults: MAX_RESULTS_PER_TOPIC,
-  }).catch((error) => {
-    console.warn("A web research topic search failed and was skipped.", error);
-    return null;
-  }));
+  const searchContents = await runObservedStage(
+    tracker,
+    "SEARCH",
+    INTERNATIONAL_RESEARCH_TOPICS.length,
+    () => mapWithConcurrency(INTERNATIONAL_RESEARCH_TOPICS, 2, async (topic) => searchWeb.invoke({
+      query: `${digestDate} ${topic}`,
+      maxResults: MAX_RESULTS_PER_TOPIC,
+    }).catch((error) => {
+      console.warn("A web research topic search failed and was skipped.", error);
+      return null;
+    })),
+    (contents) => ({
+      outputCount: contents.flatMap((content) => typeof content === "string" ? getSearchCandidates(content) : []).length,
+      details: {
+        successfulTopicCount: contents.filter((content) => typeof content === "string").length,
+        skippedTopicCount: contents.filter((content) => content === null).length,
+      },
+    }),
+    { provider: "web-search" },
+  );
   const successfulSearchContents = searchContents.filter((content): content is string => typeof content === "string");
 
   if (successfulSearchContents.length === 0) {
     throw new WebSearchDigestAgentError("WEB_RESEARCH_UNAVAILABLE", 502, "所有国际主题的全网搜索均暂时不可用。");
   }
 
-  const candidateClusters = selectMultiSourceClusters(
-    clusterWebSearchCandidates(successfulSearchContents.flatMap(getSearchCandidates)),
-    {
-      minimumSourceDomains: MINIMUM_SOURCE_DOMAINS_PER_EVENT,
-      maximumClusters: MAX_CANDIDATE_CLUSTERS,
-    },
+  const searchCandidates = successfulSearchContents.flatMap(getSearchCandidates);
+  const candidateClusters = await runObservedStage(
+    tracker,
+    "CLUSTER",
+    searchCandidates.length,
+    async () => selectMultiSourceClusters(
+      clusterWebSearchCandidates(searchCandidates),
+      {
+        minimumSourceDomains: MINIMUM_SOURCE_DOMAINS_PER_EVENT,
+        maximumClusters: MAX_CANDIDATE_CLUSTERS,
+      },
+    ),
+    (clusters) => ({
+      outputCount: clusters.length,
+      details: {
+        minimumSourceDomains: MINIMUM_SOURCE_DOMAINS_PER_EVENT,
+        maximumClusters: MAX_CANDIDATE_CLUSTERS,
+      },
+    }),
   );
   const plannedCandidates = candidateClusters.flatMap((cluster) => selectDistinctDomainCandidates(cluster, MAX_SOURCES_PER_EVENT));
-  const fetchedContents = await mapWithConcurrency(plannedCandidates, 4, async (candidate) => ({
-    candidate,
-    content: await fetchArticle.invoke({ url: candidate.canonicalUrl }),
-  }));
+  const fetchedContents = await runObservedStage(
+    tracker,
+    "FETCH",
+    plannedCandidates.length,
+    () => mapWithConcurrency(plannedCandidates, 4, async (candidate) => ({
+      candidate,
+      content: await fetchArticle.invoke({ url: candidate.canonicalUrl }),
+    })),
+    (contents) => ({
+      outputCount: contents.filter(({ candidate, content }) => Boolean(toRetrievedSource(candidate, content))).length,
+    }),
+    { maximumSourcesPerEvent: MAX_SOURCES_PER_EVENT },
+  );
   const sourcesByUrl = new Map(
     fetchedContents.flatMap(({ candidate, content }) => {
       const source = toRetrievedSource(candidate, content);
@@ -546,7 +610,10 @@ async function synthesizeDigestOutput(
   return { stories: outputs.flat() };
 }
 
-export async function runWebSearchDigest(digestDate: string): Promise<WebSearchDigestRunResult> {
+export async function runWebSearchDigest(
+  digestDate: string,
+  tracker?: AgentRunTracker | null,
+): Promise<WebSearchDigestRunResult> {
   let searchConfig;
 
   try {
@@ -570,7 +637,7 @@ export async function runWebSearchDigest(digestDate: string): Promise<WebSearchD
   const configuredModel = getDeepSeekDigestModel();
 
   try {
-    const eventClusters = await retrieveEventClusters(digestDate);
+    const eventClusters = await retrieveEventClusters(digestDate, tracker);
     if (eventClusters.length === 0) {
       throw new WebSearchDigestAgentError(
         "WEB_RESEARCH_UNAVAILABLE",
@@ -580,13 +647,29 @@ export async function runWebSearchDigest(digestDate: string): Promise<WebSearchD
     }
 
     const retrievedSources = eventClusters.flatMap((cluster) => cluster.sources);
-    const output = await synthesizeDigestOutput(configuredModel.client, digestDate, eventClusters);
-    const digest = buildWebSearchDigestFromOutput({
-      digestDate,
-      generatedAt: new Date(),
-      output,
-      retrievedSources,
-    });
+    const output = await runObservedStage(
+      tracker,
+      "SYNTHESIZE",
+      eventClusters.length,
+      () => synthesizeDigestOutput(configuredModel.client, digestDate, eventClusters),
+      (result) => ({
+        outputCount: Array.isArray(result.stories) ? result.stories.length : 0,
+        details: { sourceDocumentCount: retrievedSources.length },
+      }),
+      { model: configuredModel.model },
+    );
+    const digest = await runObservedStage(
+      tracker,
+      "VALIDATE",
+      Array.isArray(output.stories) ? output.stories.length : 0,
+      async () => buildWebSearchDigestFromOutput({
+        digestDate,
+        generatedAt: new Date(),
+        output,
+        retrievedSources,
+      }),
+      (result) => ({ outputCount: result.stories.length }),
+    );
 
     return {
       digest,
@@ -616,15 +699,31 @@ export async function generateAndPublishWebSearchDigest(
   digestDate: string,
   trigger: "manual" | "cron",
 ): Promise<PublishedWebSearchDigestResult> {
-  const result = await runWebSearchDigest(digestDate);
-  const digest = await publishDigest(result.digest, {
-    trigger,
-    model: result.model,
-    retrievedDocumentCount: result.retrievedDocumentCount,
-  });
+  const tracker = await startAgentRunTracker({ digestDate, trigger });
 
-  return {
-    ...result,
-    digest,
-  };
+  try {
+    const result = await runWebSearchDigest(digestDate, tracker);
+    await tracker?.startStage("PUBLISH", { inputCount: result.digest.stories.length });
+
+    try {
+      const digest = await publishDigest(result.digest, {
+        trigger,
+        model: result.model,
+        retrievedDocumentCount: result.retrievedDocumentCount,
+        agentRunId: tracker?.agentRunId,
+      });
+      await tracker?.completeStage("PUBLISH", { outputCount: digest.stories.length });
+
+      return {
+        ...result,
+        digest,
+      };
+    } catch (error) {
+      await tracker?.failStage("PUBLISH", error);
+      throw error;
+    }
+  } catch (error) {
+    await tracker?.failRun(error);
+    throw error;
+  }
 }
