@@ -17,6 +17,7 @@
 - **证据约束生成**：LLM 只能综合本轮实际读取的网页；来源链接由服务端重新绑定和校验，而非直接相信模型输出。
 - **持久化日报**：将日报、事件、来源、引用与 Agent 运行记录写入 PostgreSQL，可查询当天已发布版本。
 - **定时运行**：Vercel Cron 按北京时间每天零点触发自动研究任务；当天已有已发布日报时安全跳过。
+- **可观测性与评估**：每次生成记录检索、聚类、读取、综合、校验、发布六阶段漏斗，并以确定性规则计算时效性、多源覆盖、去重和引用有效性。
 - **上下文追问**：详情页使用独立的 OpenAI 兼容 LLM 配置，结合当前事件材料和最近对话回答背景、概念与潜在影响。
 - **安全的推测边界**：当前事件的时效事实以收集到的材料为依据；材料缺失时，模型可提供明确标注的条件性分析，但不得将推测包装为已核实事实。
 
@@ -35,16 +36,31 @@ flowchart LR
   gate -->|未通过| discard["丢弃"]
   llm --> validate["引用校验"]
   validate --> db[("Neon 数据库")]
+  agent --> telemetry["运行轨迹与质量评估"]
+  telemetry --> db
   db --> web["Next.js 工作台"]
+  web --> dashboard["生成详情控制台"]
   web --> chat["上下文 AI 追问"]
 ```
+
+## Agent 可观测性与评估
+
+首页的 **生成详情** 入口会打开只读控制台，用于解释一份日报如何产生，而不是暴露管理权限或模型配置。控制台展示：
+
+- 检索 → 聚类 → 原文读取 → 综合 → 校验 → 发布的阶段漏斗，包含输入量、输出量、耗时与脱敏失败摘要。
+- 版本化质量指标：时效性、多源覆盖率、平均来源数、类别覆盖率、标题去重率与引用 URL 有效率。
+- 最近 14 次运行的状态、耗时及关键质量评分；运行中任务最多每 5 秒刷新一次，完成后自动停止轮询。
+
+运行记录只保存聚合数值和安全元数据。控制台接口不会返回 API Key、Token、完整提示词、网页正文或用户会话内容。详细数据契约见 [Agent 可观测性与评估数据契约](./docs/agent-observability-data-contract.md)。
+
+> 截图位：完成首个带阶段轨迹的生产日报后，可将实测控制台截图保存为 `docs/screenshots/agent-observability-dashboard.png` 并在此处展示，避免使用虚构运行数据作为项目示例。
 
 ## 技术栈
 
 | 层级 | 技术 |
 | --- | --- |
 | Web 应用 | Next.js 16、React 19、TypeScript、CSS Modules |
-| Agent 与模型 | LangChain、`@langchain/openai`、DeepSeek、OpenAI 兼容 Chat Completions |
+| Agent 与模型 | LangChain、`@langchain/openai`、DeepSeek、OpenAI 兼容 Chat Completions、阶段级可观测性 |
 | 检索与网页处理 | 博查 / Tavily、服务端网页抓取、URL 规范化、来源准入策略 |
 | 数据层 | Prisma 7、PostgreSQL、Neon、`pg` Adapter |
 | 调度与部署 | Vercel Cron、Vercel Serverless、pnpm 脚本 |
@@ -166,6 +182,7 @@ NEXT_PUBLIC_APP_URL
 | `POST /api/story-questions` | 对当前事件发起上下文追问 |
 | `GET /api/news-source/latest` | 读取原始 RSS 输入，供诊断使用 |
 | `GET /api/news-source/processed` | 返回去重、清洗后的 RSS 候选，供诊断使用 |
+| `GET /api/admin/agent-observability` | 返回脱敏的 Agent 阶段漏斗、质量评估和近期运行历史 |
 | `GET /api/cron/digest` | 受 Bearer Token 保护的定时任务入口 |
 
 ## 质量与验证
@@ -177,7 +194,7 @@ pnpm lint                 # ESLint
 pnpm build                # Prisma Client 生成与 Next.js 生产构建
 ```
 
-当前测试覆盖来源规范化、搜索 Provider、事件聚类、日报持久化、运行策略、聊天服务和 Agent 输出评测等核心路径。
+当前测试覆盖来源规范化、搜索 Provider、事件聚类、日报持久化、阶段埋点、质量评估、脱敏接口、运行策略、聊天服务和 Agent 输出评测等核心路径。
 
 ## 项目结构
 
@@ -187,7 +204,7 @@ src/
   features/
     agent/                     联网研究与日报生成 Agent
     chat/                      事件上下文追问与流式响应
-    digest/                    日报读取、校验与 Prisma 持久化
+    digest/                    日报读取、校验、可观测性、评估与 Prisma 持久化
     news-source/               RSS 输入与文章预处理
     web-search/                Provider、网页读取、聚类与来源策略
   lib/                         Prisma Client、站点 URL 等基础设施
