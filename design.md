@@ -51,3 +51,68 @@ modern-minimal。内容阅读页允许使用更强的编辑式排版节奏，Age
 - 暖棕纸面、赭棕强调色、Geist 为主字体。
 - 可见焦点、细边框、圆角控制件与克制阴影。
 - 所有颜色、字体、间距、圆角和动效均引用 `tokens.css` 中的 token。
+
+## Exports
+
+`tokens.css` 是运行时唯一的 token 来源；以下映射用于在新增页面或迁移组件库时
+保持同一套设计语言。
+
+### CSS tokens
+
+```css
+:root {
+  --color-paper: oklch(95.5% 0.018 67);
+  --color-panel: oklch(96.8% 0.012 68);
+  --color-ink: oklch(24% 0.026 52);
+  --color-muted: oklch(49% 0.022 57);
+  --color-rule: oklch(78% 0.028 62);
+  --color-accent: oklch(48% 0.105 45);
+  --color-focus: oklch(43% 0.135 258);
+
+  --font-display: var(--font-geist-sans), "Noto Sans SC", sans-serif;
+  --font-body: var(--font-geist-sans), "Noto Sans SC", sans-serif;
+  --font-reading: var(--font-newsreader), "Noto Serif SC", serif;
+  --font-mono: var(--font-geist-mono), monospace;
+}
+```
+
+### Tailwind v4 mapping
+
+```css
+@theme {
+  --color-background: var(--color-paper);
+  --color-foreground: var(--color-ink);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
+}
+```
+
+### DTCG token mapping
+
+```json
+{
+  "color": {
+    "paper": { "$value": "oklch(95.5% 0.018 67)", "$type": "color" },
+    "ink": { "$value": "oklch(24% 0.026 52)", "$type": "color" },
+    "accent": { "$value": "oklch(48% 0.105 45)", "$type": "color" }
+  },
+  "font": {
+    "display": { "$value": "Geist", "$type": "fontFamily" },
+    "body": { "$value": "Geist", "$type": "fontFamily" }
+  }
+}
+```
+
+### shadcn/ui mapping
+
+```css
+:root {
+  --background: 95.5% 0.018 67;
+  --foreground: 24% 0.026 52;
+  --primary: 48% 0.105 45;
+  --primary-foreground: 98% 0.009 72;
+  --border: 78% 0.028 62;
+  --ring: 43% 0.135 258;
+  --radius: 0.625rem;
+}
+```
