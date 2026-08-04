@@ -236,9 +236,9 @@ function sumModelUsage(usages: ModelUsage[]): ModelUsage {
   }), { promptTokens: 0, completionTokens: 0, totalTokens: 0 });
 }
 
-function estimateModelCostUsd(usage: ModelUsage) {
-  const inputPrice = getNonNegativeNumber(process.env.AGENT_INPUT_TOKEN_COST_USD_PER_MILLION);
-  const outputPrice = getNonNegativeNumber(process.env.AGENT_OUTPUT_TOKEN_COST_USD_PER_MILLION);
+function estimateModelCostCny(usage: ModelUsage) {
+  const inputPrice = getNonNegativeNumber(process.env.AGENT_INPUT_TOKEN_COST_CNY_PER_MILLION);
+  const outputPrice = getNonNegativeNumber(process.env.AGENT_OUTPUT_TOKEN_COST_CNY_PER_MILLION);
 
   if (inputPrice === null || outputPrice === null) {
     return null;
@@ -1045,7 +1045,7 @@ export async function runWebSearchDigest(
           promptTokens: result.usage.promptTokens,
           completionTokens: result.usage.completionTokens,
           totalTokens: result.usage.totalTokens,
-          estimatedCostUsd: estimateModelCostUsd(result.usage),
+          estimatedCostCny: estimateModelCostCny(result.usage),
           llmRetryCount: result.retryCount,
           llmFailedEventCount: result.failedEventCount,
           llmFailureReason: summarizeFailureReasons(result.failureReasons),

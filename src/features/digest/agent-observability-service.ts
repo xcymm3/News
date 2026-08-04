@@ -55,7 +55,7 @@ const SAFE_OBSERVABILITY_DETAIL_KEYS = new Set([
   "promptTokens",
   "completionTokens",
   "totalTokens",
-  "estimatedCostUsd",
+  "estimatedCostCny",
   "llmRetryCount",
   "llmFailedEventCount",
   "llmFailureReason",

@@ -44,7 +44,7 @@ const STAGE_DETAIL_LABELS: Record<string, string> = {
   promptTokens: "输入 Token",
   completionTokens: "输出 Token",
   totalTokens: "总 Token",
-  estimatedCostUsd: "费用估算（USD）",
+  estimatedCostCny: "费用估算（元）",
   llmRetryCount: "模型重试次数",
   llmFailedEventCount: "模型失败事件",
   llmFailureReason: "模型失败原因",
@@ -137,11 +137,11 @@ function formatScore(value: number) {
 
 function formatStageDetailValue(key: string, value: string | number | boolean | null) {
   if (value === null) {
-    return key === "estimatedCostUsd" ? "未配置单价" : "无";
+    return key === "estimatedCostCny" ? "未配置单价" : "无";
   }
 
-  if (key === "estimatedCostUsd" && typeof value === "number") {
-    return `$${value.toFixed(6)}`;
+  if (key === "estimatedCostCny" && typeof value === "number") {
+    return `¥${value.toFixed(6)}`;
   }
 
   return String(value);
