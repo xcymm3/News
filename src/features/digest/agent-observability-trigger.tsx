@@ -71,6 +71,13 @@ const EVENT_REASON_LABELS: Record<string, string> = {
   RANKED_BELOW_FINAL_CUTOFF: "综合评分未进入最终选题",
 };
 
+const STAGE_HIGHLIGHT_KEYS: Partial<Record<AgentRunStageSnapshot["stage"], string[]>> = {
+  search: ["rssArticleCount", "bochaCandidateCount", "rssAvailableSourceCount"],
+  cluster: ["multiSourceCandidateCount", "singleSourceReserveCount", "insufficientSourceRejectedCount"],
+  fetch: ["fetchFailedCount", "fetchRetryCount"],
+  synthesize: ["totalTokens", "estimatedCostCny", "llmRejectedEventCount"],
+};
+
 function ActivityIcon() {
   return (
     <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
@@ -219,7 +226,7 @@ function QualityPanel({ evaluation }: { evaluation?: AgentQualityEvaluationSnaps
     return (
       <section className={styles.section} aria-labelledby="quality-heading">
         <div className={styles.sectionHeading}>
-          <p className={styles.sectionIndex}>03</p>
+          <p className={styles.sectionIndex}>04</p>
           <h3 id="quality-heading">质量评估</h3>
         </div>
         <p className={styles.mutedMessage}>本次运行尚未生成质量评估。成功发布后的新日报会自动计算。</p>
@@ -230,7 +237,7 @@ function QualityPanel({ evaluation }: { evaluation?: AgentQualityEvaluationSnaps
   return (
     <section className={styles.section} aria-labelledby="quality-heading">
       <div className={styles.sectionHeading}>
-        <p className={styles.sectionIndex}>03</p>
+        <p className={styles.sectionIndex}>04</p>
         <h3 id="quality-heading">质量评估</h3>
         <span className={styles.version}>算法 {evaluation.evaluationVersion}</span>
       </div>
@@ -238,9 +245,7 @@ function QualityPanel({ evaluation }: { evaluation?: AgentQualityEvaluationSnaps
         <QualityMetric hint="来源发布时间" label="时效性" value={formatScore(evaluation.freshnessScore)} />
         <QualityMetric hint="至少两域名" label="多源覆盖" value={formatScore(evaluation.multiSourceCoverage)} />
         <QualityMetric hint="标题相似度检查" label="去重率" value={formatScore(evaluation.duplicateFreeRate)} />
-        <QualityMetric hint="合法 HTTP(S)" label="引用有效" value={formatScore(evaluation.citationUrlValidity)} />
         <QualityMetric hint="平均独立域名" label="每条来源" value={evaluation.averageSourcesPerStory.toFixed(1)} />
-        <QualityMetric hint="本次引用站点" label="独立域名" value={formatCount(evaluation.sourceDomainCount)} />
       </div>
       <p className={styles.evaluationNote}>指标衡量流程健康度与来源结构，不代表对新闻事实的独立核验。</p>
     </section>
@@ -263,8 +268,25 @@ function formatDecisionScoreDetails(details?: AgentRunEventDecisionSnapshot["sco
   return [freshness, source, corroboration].filter(Boolean).join(" · ") || "—";
 }
 
+function EventDecisionItem({ item }: { item: AgentRunEventDecisionSnapshot }) {
+  return (
+    <li className={styles.decisionItem}>
+      <div>
+        <p className={styles.decisionHeadline}>{item.headline}</p>
+        <p className={styles.decisionMeta}>{formatDecisionScoreDetails(item.scoreDetails)} · 来源 {item.sourceDomainCount} 个</p>
+      </div>
+      <div className={styles.decisionSide}>
+        <strong>{item.score ?? "—"}</strong>
+        <span className={`${styles.statusBadge} ${item.decision === "selected" ? styles.statussucceeded : styles.statusfailed}`}>{getEventDecisionStatusLabel(item.decision)}</span>
+      </div>
+    </li>
+  );
+}
+
 function EventDecisionPanel({ decisions }: { decisions: AgentRunEventDecisionSnapshot[] }) {
   const finalSelection = decisions.filter((decision) => decision.phase === "final_selection");
+  const selectedEvents = finalSelection.filter((item) => item.decision === "selected");
+  const rejectedAtFinalSelection = finalSelection.filter((item) => item.decision === "rejected");
   const rejectedForSources = decisions.filter((decision) => (
     decision.decision === "rejected"
     && (decision.reason === "INSUFFICIENT_SOURCES" || decision.reason === "INSUFFICIENT_READABLE_SOURCES")
@@ -275,37 +297,33 @@ function EventDecisionPanel({ decisions }: { decisions: AgentRunEventDecisionSna
       <div className={styles.sectionHeading}>
         <p className={styles.sectionIndex}>03</p>
         <h3 id="selection-heading">选题决策</h3>
-        <span className={styles.historyCount}>最终 {finalSelection.filter((item) => item.decision === "selected").length} 条</span>
+        <span className={styles.historyCount}>最终 {selectedEvents.length} 条</span>
       </div>
       {decisions.length === 0 ? (
         <p className={styles.mutedMessage}>旧运行没有保存事件级决策。下一次运行会记录候选淘汰与最终评分。</p>
       ) : (
         <>
-          <p className={styles.decisionIntro}>评分由时效（45 分）、独立来源数（35 分）和候选佐证数（20 分）构成；模型仅负责综合入选事件的材料。</p>
+          <p className={styles.decisionIntro}>按时效、多源覆盖与佐证数量评分；以下展示得分最高的 3 条入选事件。</p>
           <ol className={styles.decisionList}>
-            {finalSelection.map((item) => (
-              <li className={styles.decisionItem} key={`${item.phase}-${item.candidateId}`}>
-                <div>
-                  <p className={styles.decisionHeadline}>{item.headline}</p>
-                  <p className={styles.decisionMeta}>{formatDecisionScoreDetails(item.scoreDetails)} · 来源 {item.sourceDomainCount} 个 · 候选 {item.candidateCount} 篇</p>
-                  <p className={styles.decisionReason}>{EVENT_REASON_LABELS[item.reason] ?? item.reason}</p>
-                </div>
-                <div className={styles.decisionSide}>
-                  <strong>{item.score ?? "—"}</strong>
-                  <span className={`${styles.statusBadge} ${item.decision === "selected" ? styles.statussucceeded : styles.statusfailed}`}>{getEventDecisionStatusLabel(item.decision)}</span>
-                </div>
-              </li>
-            ))}
+            {selectedEvents.slice(0, 3).map((item) => <EventDecisionItem item={item} key={`${item.phase}-${item.candidateId}`} />)}
           </ol>
-          {rejectedForSources.length > 0 && (
-            <div className={styles.rejectedEvents}>
-              <p>因来源不足淘汰 {rejectedForSources.length} 个事件</p>
-              <ul>
-                {rejectedForSources.slice(0, 12).map((item) => (
-                  <li key={`${item.phase}-${item.candidateId}`}>{item.headline} · {EVENT_REASON_LABELS[item.reason]}</li>
-                ))}
-              </ul>
-            </div>
+          <div className={styles.rejectedEvents}>
+            <p>候选淘汰：来源不足 {rejectedForSources.length} 个 · 最终评分未入选 {rejectedAtFinalSelection.length} 个</p>
+          </div>
+          {(finalSelection.length > 3 || rejectedForSources.length > 0) && (
+            <details className={styles.detailDisclosure}>
+              <summary>查看全部选题决策与淘汰样本</summary>
+              <ol className={styles.decisionList}>
+                {finalSelection.map((item) => <EventDecisionItem item={item} key={`${item.phase}-${item.candidateId}`} />)}
+              </ol>
+              {rejectedForSources.length > 0 && (
+                <ul className={styles.rejectionSampleList}>
+                  {rejectedForSources.slice(0, 8).map((item) => (
+                    <li key={`${item.phase}-${item.candidateId}`}>{item.headline} · {EVENT_REASON_LABELS[item.reason]}</li>
+                  ))}
+                </ul>
+              )}
+            </details>
           )}
         </>
       )}
@@ -326,6 +344,11 @@ function PipelinePanel({ run }: { run: AgentRunSnapshot }) {
         {STAGES.map((definition, index) => {
           const stage = stageByName.get(definition.stage);
           const statusClass = stage ? styles[`status${stage.status}`] : styles.statusPending;
+          const highlightKeys = STAGE_HIGHLIGHT_KEYS[definition.stage] ?? [];
+          const highlightedDetails = highlightKeys.flatMap((key) => (
+            stage?.details && key in stage.details ? [[key, stage.details[key]] as const] : []
+          ));
+          const remainingDetails = Object.entries(stage?.details ?? {}).filter(([key]) => !highlightKeys.includes(key));
 
           return (
             <li className={styles.pipelineItem} key={definition.stage}>
@@ -344,14 +367,24 @@ function PipelinePanel({ run }: { run: AgentRunSnapshot }) {
                   <span>{formatCount(stage?.outputCount)}</span>
                   <span className={styles.pipelineDuration}>{formatDuration(stage?.durationMs)}</span>
                 </div>
-                {stage?.details && (
+                {highlightedDetails.length > 0 && (
                   <div className={styles.stageDetails}>
-                    {Object.entries(stage.details).map(([key, value]) => (
+                    {highlightedDetails.map(([key, value]) => (
                       <span key={key}>{STAGE_DETAIL_LABELS[key] ?? key}：{formatStageDetailValue(key, value)}</span>
                     ))}
                   </div>
                 )}
                 {stage?.errorMessage && <p className={styles.stageError}>{stage.errorMessage}</p>}
+                {remainingDetails.length > 0 && (
+                  <details className={styles.detailDisclosure}>
+                    <summary>查看 {remainingDetails.length} 项运行参数</summary>
+                    <div className={styles.stageDetails}>
+                      {remainingDetails.map(([key, value]) => (
+                        <span key={key}>{STAGE_DETAIL_LABELS[key] ?? key}：{formatStageDetailValue(key, value)}</span>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
             </li>
           );
@@ -365,27 +398,47 @@ function HistoryPanel({ snapshot }: { snapshot: AgentObservabilitySnapshot }) {
   return (
     <section className={styles.section} aria-labelledby="history-heading">
       <div className={styles.sectionHeading}>
-        <p className={styles.sectionIndex}>04</p>
+        <p className={styles.sectionIndex}>05</p>
         <h3 id="history-heading">最近运行</h3>
         <span className={styles.historyCount}>{snapshot.history.length} 条</span>
       </div>
       {snapshot.history.length === 0 ? (
         <p className={styles.mutedMessage}>尚无日报生成记录。</p>
       ) : (
-        <ol className={styles.historyList}>
-          {snapshot.history.map((run) => (
-            <li className={styles.historyItem} key={run.id}>
-              <div>
-                <p className={styles.historyDate}>{run.digestDate}</p>
-                <p className={styles.historyMeta}>{getTriggerLabel(run.trigger)} · {formatDateTime(run.startedAt)} · {formatDuration(run.totalDurationMs)}</p>
-              </div>
-              <div className={styles.historySide}>
-                <span className={`${styles.statusBadge} ${styles[`status${run.status}`]}`}>{getRunStatusLabel(run.status)}</span>
-                {run.evaluation && <span className={styles.historyScore}>质 {formatScore(run.evaluation.freshnessScore)}</span>}
-              </div>
-            </li>
-          ))}
-        </ol>
+        <>
+          <ol className={styles.historyList}>
+            {snapshot.history.slice(0, 3).map((run) => (
+              <li className={styles.historyItem} key={run.id}>
+                <div>
+                  <p className={styles.historyDate}>{run.digestDate}</p>
+                  <p className={styles.historyMeta}>{getTriggerLabel(run.trigger)} · {formatDateTime(run.startedAt)} · {formatDuration(run.totalDurationMs)}</p>
+                </div>
+                <div className={styles.historySide}>
+                  <span className={`${styles.statusBadge} ${styles[`status${run.status}`]}`}>{getRunStatusLabel(run.status)}</span>
+                  {run.evaluation && <span className={styles.historyScore}>质 {formatScore(run.evaluation.freshnessScore)}</span>}
+                </div>
+              </li>
+            ))}
+          </ol>
+          {snapshot.history.length > 3 && (
+            <details className={styles.detailDisclosure}>
+              <summary>查看其余 {snapshot.history.length - 3} 次运行</summary>
+              <ol className={styles.historyList}>
+                {snapshot.history.slice(3).map((run) => (
+                  <li className={styles.historyItem} key={run.id}>
+                    <div>
+                      <p className={styles.historyDate}>{run.digestDate}</p>
+                      <p className={styles.historyMeta}>{getTriggerLabel(run.trigger)} · {formatDateTime(run.startedAt)} · {formatDuration(run.totalDurationMs)}</p>
+                    </div>
+                    <div className={styles.historySide}>
+                      <span className={`${styles.statusBadge} ${styles[`status${run.status}`]}`}>{getRunStatusLabel(run.status)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )}
+        </>
       )}
     </section>
   );
