@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildWebSearchDigestFromOutput, collectRetrievedWebSources, parseWebSearchDigestOutput } from "./web-search-digest-agent";
+import { buildWebSearchDigestFromOutput, collectRetrievedWebSources, parseWebSearchDigestOutput, toRssWebSearchCandidate } from "./web-search-digest-agent";
 
 const messages = [
   {
@@ -29,6 +29,29 @@ const messages = [
 ];
 
 describe("web search digest agent", () => {
+  it("normalizes a Chinese RSS article into a web research candidate", () => {
+    expect(toRssWebSearchCandidate({
+      externalId: "rss-1",
+      canonicalUrl: "https://rss.example.com/articles/1?utm_source=feed",
+      title: " RSS 国际新闻标题 ",
+      excerpt: "RSS 摘要。",
+      sourceName: "中国新闻网",
+      sourceDomain: "rss.example.com",
+      language: "zh-CN",
+      publishedAt: "2026-08-04T00:00:00.000Z",
+    }, {
+      allowedDomainSuffixes: [],
+      excludedDomainSuffixes: [],
+      maxResults: 20,
+      maxAgeHours: 72,
+    })).toEqual(expect.objectContaining({
+      title: "RSS 国际新闻标题",
+      canonicalUrl: "https://rss.example.com/articles/1",
+      sourceName: "中国新闻网",
+      publishedAt: "2026-08-04T00:00:00.000Z",
+    }));
+  });
+
   it("extracts a JSON digest from an Agnes text-wrapped response", () => {
     expect(parseWebSearchDigestOutput(JSON.stringify(`已完成资料整理。</think>\n\n{
       "stories": [{"headline": "测试新闻"}]

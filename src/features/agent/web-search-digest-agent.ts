@@ -14,8 +14,10 @@ import {
 import type { DailyDigest, DigestCitation, DigestStory } from "@/features/digest/types";
 import {
   getWebSearchConfig,
+  normalizeWebSearchCandidate,
   WebSearchConfigurationError,
   type WebSearchCandidate,
+  type WebSourcePolicy,
 } from "@/features/web-search/web-search-contract";
 import {
   clusterWebSearchCandidates,
@@ -25,6 +27,7 @@ import {
 } from "@/features/web-search/event-clustering";
 import { WebSearchProviderError } from "@/features/web-search/web-search-provider";
 import { createWebResearchTools } from "@/features/web-search/web-research-tools";
+import { getLatestChineseRssNews, type RawNewsArticle } from "@/features/news-source/live-news-source";
 
 const MAX_WEB_AGENT_STORIES = 12;
 const MAX_DOCUMENT_CONTEXT_CHARACTERS = 3_000;
@@ -72,6 +75,21 @@ type RetrievedEventCluster = {
   cluster: WebEventCluster;
   sources: RetrievedWebSource[];
 };
+
+type RssSearchResult = {
+  candidates: WebSearchCandidate[];
+  articleCount: number;
+  candidateCount: number;
+  availableSourceCount: number;
+  sourceCounts: Record<RssSourceMetricKey, number>;
+};
+
+type RssSourceMetricKey =
+  | "rssChinanewsCount"
+  | "rss36KrCount"
+  | "rssCnaInternationalCount"
+  | "rssIthomeCount"
+  | "rssHuxiuCount";
 
 export type WebSearchDigestRunResult = {
   digest: DailyDigest;
@@ -431,6 +449,74 @@ async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, task
   return results;
 }
 
+const RSS_SOURCE_METRICS: ReadonlyArray<{ name: string; key: RssSourceMetricKey }> = [
+  { name: "中国新闻网", key: "rssChinanewsCount" },
+  { name: "36氪", key: "rss36KrCount" },
+  { name: "中央社国际", key: "rssCnaInternationalCount" },
+  { name: "IT之家", key: "rssIthomeCount" },
+  { name: "虎嗅", key: "rssHuxiuCount" },
+];
+
+function createEmptyRssSourceCounts(): Record<RssSourceMetricKey, number> {
+  return {
+    rssChinanewsCount: 0,
+    rss36KrCount: 0,
+    rssCnaInternationalCount: 0,
+    rssIthomeCount: 0,
+    rssHuxiuCount: 0,
+  };
+}
+
+export function toRssWebSearchCandidate(article: RawNewsArticle, policy: WebSourcePolicy) {
+  return normalizeWebSearchCandidate({
+    id: article.externalId,
+    title: article.title,
+    snippet: article.excerpt,
+    canonicalUrl: article.canonicalUrl,
+    sourceName: article.sourceName,
+    publishedAt: article.publishedAt,
+  }, policy);
+}
+
+async function retrieveRssSearchCandidates(policy: WebSourcePolicy): Promise<RssSearchResult> {
+  const sourceCounts = createEmptyRssSourceCounts();
+
+  try {
+    const rss = await getLatestChineseRssNews();
+    const sourceMetricByName = new Map(RSS_SOURCE_METRICS.map((source) => [source.name, source.key]));
+
+    for (const article of rss.articles) {
+      const metricKey = sourceMetricByName.get(article.sourceName);
+      if (metricKey) {
+        sourceCounts[metricKey] += 1;
+      }
+    }
+
+    const candidates = rss.articles.flatMap((article) => {
+      const candidate = toRssWebSearchCandidate(article, policy);
+      return candidate ? [candidate] : [];
+    });
+
+    return {
+      candidates,
+      articleCount: rss.articles.length,
+      candidateCount: candidates.length,
+      availableSourceCount: rss.sourceNames.length,
+      sourceCounts,
+    };
+  } catch (error) {
+    console.warn("Chinese RSS ingestion failed and was skipped.", error);
+
+    return {
+      candidates: [],
+      articleCount: 0,
+      candidateCount: 0,
+      availableSourceCount: 0,
+      sourceCounts,
+    };
+  }
+}
+
 async function runObservedStage<T>(
   tracker: AgentRunTracker | null | undefined,
   stage: AgentRunStageKey,
@@ -490,36 +576,55 @@ function toRetrievedSource(candidate: WebSearchCandidate, content: string): Retr
 
 async function retrieveEventClusters(
   digestDate: string,
+  policy: WebSourcePolicy,
   tracker?: AgentRunTracker | null,
 ): Promise<RetrievedEventCluster[]> {
-  const [searchWeb, fetchArticle] = createWebResearchTools();
-  const searchContents = await runObservedStage(
+  const [searchWeb, fetchArticle] = createWebResearchTools({ policy });
+  const searchResult = await runObservedStage(
     tracker,
     "SEARCH",
-    INTERNATIONAL_RESEARCH_TOPICS.length,
-    () => mapWithConcurrency(INTERNATIONAL_RESEARCH_TOPICS, 2, async (topic) => searchWeb.invoke({
-      query: `${digestDate} ${topic}`,
-      maxResults: MAX_RESULTS_PER_TOPIC,
-    }).catch((error) => {
-      console.warn("A web research topic search failed and was skipped.", error);
-      return null;
-    })),
-    (contents) => ({
-      outputCount: contents.flatMap((content) => typeof content === "string" ? getSearchCandidates(content) : []).length,
-      details: {
-        successfulTopicCount: contents.filter((content) => typeof content === "string").length,
-        skippedTopicCount: contents.filter((content) => content === null).length,
-      },
-    }),
-    { provider: "web-search" },
-  );
-  const successfulSearchContents = searchContents.filter((content): content is string => typeof content === "string");
+    INTERNATIONAL_RESEARCH_TOPICS.length + RSS_SOURCE_METRICS.length,
+    async () => {
+      const [rss, contents] = await Promise.all([
+        retrieveRssSearchCandidates(policy),
+        mapWithConcurrency(INTERNATIONAL_RESEARCH_TOPICS, 2, async (topic) => searchWeb.invoke({
+          query: `${digestDate} ${topic}`,
+          maxResults: MAX_RESULTS_PER_TOPIC,
+        }).catch((error) => {
+          console.warn("A web research topic search failed and was skipped.", error);
+          return null;
+        })),
+      ]);
 
-  if (successfulSearchContents.length === 0) {
+      return { rss, contents };
+    },
+    ({ rss, contents }) => {
+      const bochaCandidateCount = contents.flatMap((content) => typeof content === "string" ? getSearchCandidates(content) : []).length;
+
+      return {
+        outputCount: rss.candidateCount + bochaCandidateCount,
+        details: {
+          successfulTopicCount: contents.filter((content) => typeof content === "string").length,
+          skippedTopicCount: contents.filter((content) => content === null).length,
+          rssConfiguredSourceCount: RSS_SOURCE_METRICS.length,
+          rssAvailableSourceCount: rss.availableSourceCount,
+          rssArticleCount: rss.articleCount,
+          rssCandidateCount: rss.candidateCount,
+          bochaCandidateCount,
+          ...rss.sourceCounts,
+        },
+      };
+    },
+    { provider: "bocha+rss" },
+  );
+  const successfulSearchContents = searchResult.contents.filter((content): content is string => typeof content === "string");
+  const bochaCandidates = successfulSearchContents.flatMap(getSearchCandidates);
+  const searchCandidates = [...searchResult.rss.candidates, ...bochaCandidates];
+
+  if (searchCandidates.length === 0) {
     throw new WebSearchDigestAgentError("WEB_RESEARCH_UNAVAILABLE", 502, "所有国际主题的全网搜索均暂时不可用。");
   }
 
-  const searchCandidates = successfulSearchContents.flatMap(getSearchCandidates);
   const candidateClusters = await runObservedStage(
     tracker,
     "CLUSTER",
@@ -540,6 +645,7 @@ async function retrieveEventClusters(
     }),
   );
   const plannedCandidates = candidateClusters.flatMap((cluster) => selectDistinctDomainCandidates(cluster, MAX_SOURCES_PER_EVENT));
+  const rssCandidateUrls = new Set(searchResult.rss.candidates.map((candidate) => candidate.canonicalUrl));
   const fetchedContents = await runObservedStage(
     tracker,
     "FETCH",
@@ -551,7 +657,11 @@ async function retrieveEventClusters(
     (contents) => ({
       outputCount: contents.filter(({ candidate, content }) => Boolean(toRetrievedSource(candidate, content))).length,
     }),
-    { maximumSourcesPerEvent: MAX_SOURCES_PER_EVENT },
+    {
+      maximumSourcesPerEvent: MAX_SOURCES_PER_EVENT,
+      rssSelectedCandidateCount: plannedCandidates.filter((candidate) => rssCandidateUrls.has(candidate.canonicalUrl)).length,
+      bochaSelectedCandidateCount: plannedCandidates.filter((candidate) => !rssCandidateUrls.has(candidate.canonicalUrl)).length,
+    },
   );
   const sourcesByUrl = new Map(
     fetchedContents.flatMap(({ candidate, content }) => {
@@ -639,7 +749,7 @@ export async function runWebSearchDigest(
   const configuredModel = getDeepSeekDigestModel();
 
   try {
-    const eventClusters = await retrieveEventClusters(digestDate, tracker);
+    const eventClusters = await retrieveEventClusters(digestDate, searchConfig.policy, tracker);
     if (eventClusters.length === 0) {
       throw new WebSearchDigestAgentError(
         "WEB_RESEARCH_UNAVAILABLE",
