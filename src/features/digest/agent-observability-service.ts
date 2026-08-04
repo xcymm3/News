@@ -9,6 +9,7 @@ import { getPrismaClient } from "@/lib/prisma";
 
 import type {
   AgentObservabilitySnapshot,
+  AgentRunEventDecisionSnapshot,
   AgentRunHistoryItem,
   AgentRunSnapshot,
 } from "./agent-observability-contract";
@@ -16,6 +17,7 @@ import type {
 export type {
   AgentObservabilitySnapshot,
   AgentQualityEvaluationSnapshot,
+  AgentRunEventDecisionSnapshot,
   AgentRunHistoryItem,
   AgentRunSnapshot,
   AgentRunStageSnapshot,
@@ -23,6 +25,45 @@ export type {
 
 const HISTORY_LIMIT = 14;
 const PUBLIC_ERROR_MESSAGE_MAX_LENGTH = 240;
+const SAFE_OBSERVABILITY_DETAIL_KEYS = new Set([
+  "successfulTopicCount",
+  "skippedTopicCount",
+  "rssConfiguredSourceCount",
+  "rssAvailableSourceCount",
+  "rssArticleCount",
+  "rssCandidateCount",
+  "rssChinanewsCount",
+  "rss36KrCount",
+  "rssCnaInternationalCount",
+  "rssIthomeCount",
+  "rssHuxiuCount",
+  "bochaCandidateCount",
+  "searchRetryCount",
+  "searchFailureReason",
+  "minimumSourceDomains",
+  "maximumClusters",
+  "insufficientSourceRejectedCount",
+  "maximumSourcesPerEvent",
+  "rssSelectedCandidateCount",
+  "bochaSelectedCandidateCount",
+  "fetchRetryCount",
+  "fetchFailedCount",
+  "fetchFailureReason",
+  "sourceDocumentCount",
+  "model",
+  "maxRetriesPerEvent",
+  "promptTokens",
+  "completionTokens",
+  "totalTokens",
+  "estimatedCostUsd",
+  "llmRetryCount",
+  "llmFailedEventCount",
+  "llmFailureReason",
+  "freshnessScore",
+  "sourceScore",
+  "corroborationScore",
+  "ageHours",
+]);
 
 type PublicRunStatus = "running" | "succeeded" | "failed";
 type PublicRunTrigger = "manual" | "cron";
@@ -51,6 +92,20 @@ type DatabaseEvaluation = {
   citationUrlValidity: number;
 };
 
+type DatabaseEventDecision = {
+  phase: string;
+  candidateId: string;
+  headline: string;
+  decision: string;
+  reason: string;
+  score: number | null;
+  sourceDomainCount: number;
+  candidateCount: number;
+  readableSourceCount: number | null;
+  latestPublishedAt: Date | null;
+  scoreDetails: Prisma.JsonValue | null;
+};
+
 type DatabaseRun = {
   id: string;
   digestDate: Date;
@@ -63,6 +118,7 @@ type DatabaseRun = {
   startedAt: Date;
   completedAt: Date | null;
   stages: DatabaseStage[];
+  eventDecisions: DatabaseEventDecision[];
   qualityEvaluation: DatabaseEvaluation | null;
 };
 
@@ -108,7 +164,7 @@ function redactPublicErrorMessage(value: string | null) {
 }
 
 function isSafeDetailKey(key: string) {
-  return !/(api|key|token|secret|authorization|prompt|content|url)/i.test(key);
+  return SAFE_OBSERVABILITY_DETAIL_KEYS.has(key);
 }
 
 function toSafeStageDetails(value: Prisma.JsonValue | null) {
@@ -147,6 +203,22 @@ function toEvaluationSnapshot(evaluation: DatabaseEvaluation | null) {
   };
 }
 
+function toEventDecisionSnapshot(decision: DatabaseEventDecision): AgentRunEventDecisionSnapshot {
+  return {
+    phase: decision.phase.toLowerCase() as AgentRunEventDecisionSnapshot["phase"],
+    candidateId: decision.candidateId,
+    headline: decision.headline,
+    decision: decision.decision.toLowerCase() as AgentRunEventDecisionSnapshot["decision"],
+    reason: decision.reason,
+    score: decision.score ?? undefined,
+    sourceDomainCount: decision.sourceDomainCount,
+    candidateCount: decision.candidateCount,
+    readableSourceCount: decision.readableSourceCount ?? undefined,
+    latestPublishedAt: decision.latestPublishedAt?.toISOString(),
+    scoreDetails: toSafeStageDetails(decision.scoreDetails),
+  };
+}
+
 export function toAgentRunSnapshot(run: DatabaseRun): AgentRunSnapshot {
   return {
     id: run.id,
@@ -169,6 +241,7 @@ export function toAgentRunSnapshot(run: DatabaseRun): AgentRunSnapshot {
       details: toSafeStageDetails(stage.details),
       errorMessage: redactPublicErrorMessage(stage.errorMessage),
     })),
+    eventDecisions: run.eventDecisions.map(toEventDecisionSnapshot),
     evaluation: toEvaluationSnapshot(run.qualityEvaluation),
   };
 }
@@ -200,6 +273,9 @@ const AGENT_RUN_INCLUDE = {
     orderBy: { position: "asc" },
   },
   qualityEvaluation: true,
+  eventDecisions: {
+    orderBy: [{ phase: "asc" }, { decision: "asc" }, { score: "desc" }],
+  },
 } satisfies Prisma.AgentRunInclude;
 
 export async function getAgentObservabilitySnapshot(): Promise<AgentObservabilitySnapshot> {

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AgentObservabilitySnapshot,
   AgentQualityEvaluationSnapshot,
+  AgentRunEventDecisionSnapshot,
   AgentRunSnapshot,
   AgentRunStageSnapshot,
 } from "./agent-observability-contract";
@@ -34,12 +35,34 @@ const STAGE_DETAIL_LABELS: Record<string, string> = {
   bochaCandidateCount: "博查取回条数",
   rssSelectedCandidateCount: "RSS 待读取",
   bochaSelectedCandidateCount: "博查待读取",
+  searchRetryCount: "搜索重试次数",
+  searchFailureReason: "搜索失败原因",
+  insufficientSourceRejectedCount: "来源不足淘汰",
+  fetchRetryCount: "读取重试次数",
+  fetchFailedCount: "读取失败条数",
+  fetchFailureReason: "读取失败原因",
+  promptTokens: "输入 Token",
+  completionTokens: "输出 Token",
+  totalTokens: "总 Token",
+  estimatedCostUsd: "费用估算（USD）",
+  llmRetryCount: "模型重试次数",
+  llmFailedEventCount: "模型失败事件",
+  llmFailureReason: "模型失败原因",
+  maxRetriesPerEvent: "单事件最大重试",
   minimumSourceDomains: "最低来源数",
   maximumClusters: "候选上限",
   maximumSourcesPerEvent: "单事件上限",
   sourceDocumentCount: "来源网页",
   model: "模型",
   provider: "提供方",
+};
+
+const EVENT_REASON_LABELS: Record<string, string> = {
+  INSUFFICIENT_SOURCES: "独立来源不足 2 个",
+  RANKED_BELOW_CANDIDATE_CUTOFF: "候选阶段评分未进入前列",
+  INSUFFICIENT_READABLE_SOURCES: "可读取的独立来源不足 2 个",
+  TOP_SELECTION_SCORE: "综合评分进入最终选题",
+  RANKED_BELOW_FINAL_CUTOFF: "综合评分未进入最终选题",
 };
 
 function ActivityIcon() {
@@ -110,6 +133,18 @@ function formatCount(value?: number) {
 
 function formatScore(value: number) {
   return `${Math.round(value)}%`;
+}
+
+function formatStageDetailValue(key: string, value: string | number | boolean | null) {
+  if (value === null) {
+    return key === "estimatedCostUsd" ? "未配置单价" : "无";
+  }
+
+  if (key === "estimatedCostUsd" && typeof value === "number") {
+    return `$${value.toFixed(6)}`;
+  }
+
+  return String(value);
 }
 
 function getRunStatusLabel(status: AgentRunSnapshot["status"]) {
@@ -206,6 +241,72 @@ function QualityPanel({ evaluation }: { evaluation?: AgentQualityEvaluationSnaps
   );
 }
 
+function getEventDecisionStatusLabel(decision: AgentRunEventDecisionSnapshot["decision"]) {
+  return decision === "selected" ? "入选" : "淘汰";
+}
+
+function formatDecisionScoreDetails(details?: AgentRunEventDecisionSnapshot["scoreDetails"]) {
+  if (!details) {
+    return "—";
+  }
+
+  const freshness = typeof details.freshnessScore === "number" ? `时效 ${details.freshnessScore}/45` : null;
+  const source = typeof details.sourceScore === "number" ? `多源 ${details.sourceScore}/35` : null;
+  const corroboration = typeof details.corroborationScore === "number" ? `佐证 ${details.corroborationScore}/20` : null;
+
+  return [freshness, source, corroboration].filter(Boolean).join(" · ") || "—";
+}
+
+function EventDecisionPanel({ decisions }: { decisions: AgentRunEventDecisionSnapshot[] }) {
+  const finalSelection = decisions.filter((decision) => decision.phase === "final_selection");
+  const rejectedForSources = decisions.filter((decision) => (
+    decision.decision === "rejected"
+    && (decision.reason === "INSUFFICIENT_SOURCES" || decision.reason === "INSUFFICIENT_READABLE_SOURCES")
+  ));
+
+  return (
+    <section className={styles.section} aria-labelledby="selection-heading">
+      <div className={styles.sectionHeading}>
+        <p className={styles.sectionIndex}>03</p>
+        <h3 id="selection-heading">选题决策</h3>
+        <span className={styles.historyCount}>最终 {finalSelection.filter((item) => item.decision === "selected").length} 条</span>
+      </div>
+      {decisions.length === 0 ? (
+        <p className={styles.mutedMessage}>旧运行没有保存事件级决策。下一次运行会记录候选淘汰与最终评分。</p>
+      ) : (
+        <>
+          <p className={styles.decisionIntro}>评分由时效（45 分）、独立来源数（35 分）和候选佐证数（20 分）构成；模型仅负责综合入选事件的材料。</p>
+          <ol className={styles.decisionList}>
+            {finalSelection.map((item) => (
+              <li className={styles.decisionItem} key={`${item.phase}-${item.candidateId}`}>
+                <div>
+                  <p className={styles.decisionHeadline}>{item.headline}</p>
+                  <p className={styles.decisionMeta}>{formatDecisionScoreDetails(item.scoreDetails)} · 来源 {item.sourceDomainCount} 个 · 候选 {item.candidateCount} 篇</p>
+                  <p className={styles.decisionReason}>{EVENT_REASON_LABELS[item.reason] ?? item.reason}</p>
+                </div>
+                <div className={styles.decisionSide}>
+                  <strong>{item.score ?? "—"}</strong>
+                  <span className={`${styles.statusBadge} ${item.decision === "selected" ? styles.statussucceeded : styles.statusfailed}`}>{getEventDecisionStatusLabel(item.decision)}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+          {rejectedForSources.length > 0 && (
+            <div className={styles.rejectedEvents}>
+              <p>因来源不足淘汰 {rejectedForSources.length} 个事件</p>
+              <ul>
+                {rejectedForSources.slice(0, 12).map((item) => (
+                  <li key={`${item.phase}-${item.candidateId}`}>{item.headline} · {EVENT_REASON_LABELS[item.reason]}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function PipelinePanel({ run }: { run: AgentRunSnapshot }) {
   const stageByName = new Map(run.stages.map((stage) => [stage.stage, stage]));
 
@@ -240,7 +341,7 @@ function PipelinePanel({ run }: { run: AgentRunSnapshot }) {
                 {stage?.details && (
                   <div className={styles.stageDetails}>
                     {Object.entries(stage.details).map(([key, value]) => (
-                      <span key={key}>{STAGE_DETAIL_LABELS[key] ?? key}：{String(value)}</span>
+                      <span key={key}>{STAGE_DETAIL_LABELS[key] ?? key}：{formatStageDetailValue(key, value)}</span>
                     ))}
                   </div>
                 )}
@@ -314,6 +415,7 @@ function DashboardContent({ snapshot }: { snapshot: AgentObservabilitySnapshot }
         {run.errorMessage && <p className={styles.runError}>{run.errorMessage}</p>}
       </section>
       <PipelinePanel run={run} />
+      <EventDecisionPanel decisions={run.eventDecisions} />
       <QualityPanel evaluation={run.evaluation} />
       <HistoryPanel snapshot={snapshot} />
     </>

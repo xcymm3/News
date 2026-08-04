@@ -55,6 +55,20 @@ export type AgentRunStageKey = keyof typeof AGENT_RUN_STAGE_POSITIONS;
 
 export type AgentRunStageDetails = Record<string, string | number | boolean | null>;
 
+export type AgentRunEventDecisionInput = {
+  phase: "CLUSTER" | "FETCH" | "FINAL_SELECTION";
+  candidateId: string;
+  headline: string;
+  decision: "SELECTED" | "REJECTED";
+  reason: string;
+  score?: number;
+  sourceDomainCount: number;
+  candidateCount: number;
+  readableSourceCount?: number;
+  latestPublishedAt?: string | null;
+  scoreDetails?: Record<string, string | number | boolean | null>;
+};
+
 type StageStartOptions = {
   inputCount?: number;
   details?: AgentRunStageDetails;
@@ -246,6 +260,40 @@ export async function recordAgentRunQualityEvaluation({
     });
   } catch (error) {
     logObservabilityWriteError("record Agent quality evaluation", error);
+  }
+}
+
+export async function recordAgentRunEventDecisions({
+  agentRunId,
+  decisions,
+}: {
+  agentRunId: string;
+  decisions: AgentRunEventDecisionInput[];
+}) {
+  if (decisions.length === 0) {
+    return;
+  }
+
+  try {
+    await getPrismaClient().agentRunEventDecision.createMany({
+      data: decisions.map((decision) => ({
+        agentRunId,
+        phase: decision.phase,
+        candidateId: decision.candidateId,
+        headline: decision.headline.slice(0, 240),
+        decision: decision.decision,
+        reason: decision.reason,
+        score: decision.score,
+        sourceDomainCount: decision.sourceDomainCount,
+        candidateCount: decision.candidateCount,
+        readableSourceCount: decision.readableSourceCount,
+        latestPublishedAt: decision.latestPublishedAt ? toDate(decision.latestPublishedAt, new Date()) : null,
+        scoreDetails: decision.scoreDetails as Prisma.InputJsonValue | undefined,
+      })),
+      skipDuplicates: true,
+    });
+  } catch (error) {
+    logObservabilityWriteError("record Agent event decisions", error);
   }
 }
 

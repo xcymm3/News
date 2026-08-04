@@ -219,6 +219,7 @@ model AgentRun {
   digest            Digest?                    @relation(fields: [digestId], references: [id], onDelete: SetNull)
   stages            AgentRunStage[]
   qualityEvaluation AgentRunQualityEvaluation?
+  eventDecisions    AgentRunEventDecision[]
 
   @@index([digestDate, status])
   @@index([startedAt])
@@ -263,6 +264,29 @@ model AgentRunQualityEvaluation {
   agentRun AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
 
   @@index([evaluationVersion])
+}
+
+model AgentRunEventDecision {
+  id                  String   @id @default(uuid())
+  agentRunId          String
+  phase               String
+  candidateId         String
+  headline            String
+  decision            String
+  reason              String
+  score               Float?
+  sourceDomainCount   Int
+  candidateCount      Int
+  readableSourceCount Int?
+  latestPublishedAt   DateTime?
+  scoreDetails        Json?
+  createdAt           DateTime @default(now())
+
+  agentRun AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@unique([agentRunId, phase, candidateId])
+  @@index([agentRunId, phase, decision])
+  @@index([createdAt])
 }
 
 model DigestItem {

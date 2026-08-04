@@ -19,6 +19,20 @@ export type AgentRunStageSnapshot = {
   errorMessage?: string;
 };
 
+export type AgentRunEventDecisionSnapshot = {
+  phase: "cluster" | "fetch" | "final_selection";
+  candidateId: string;
+  headline: string;
+  decision: "selected" | "rejected";
+  reason: string;
+  score?: number;
+  sourceDomainCount: number;
+  candidateCount: number;
+  readableSourceCount?: number;
+  latestPublishedAt?: string;
+  scoreDetails?: Record<string, string | number | boolean | null>;
+};
+
 export type AgentRunSnapshot = {
   id: string;
   digestDate: string;
@@ -32,6 +46,7 @@ export type AgentRunSnapshot = {
   publishedStoryCount?: number;
   errorMessage?: string;
   stages: AgentRunStageSnapshot[];
+  eventDecisions: AgentRunEventDecisionSnapshot[];
   evaluation?: AgentQualityEvaluationSnapshot;
 };
 

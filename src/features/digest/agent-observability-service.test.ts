@@ -35,6 +35,19 @@ describe("agent observability service", () => {
         },
         errorMessage: null,
       }],
+      eventDecisions: [{
+        phase: "FINAL_SELECTION",
+        candidateId: "event-1",
+        headline: "测试事件",
+        decision: "SELECTED",
+        reason: "TOP_SELECTION_SCORE",
+        score: 86,
+        sourceDomainCount: 3,
+        candidateCount: 4,
+        readableSourceCount: 3,
+        latestPublishedAt: new Date("2026-08-03T00:30:00.000Z"),
+        scoreDetails: { freshnessScore: 41, sourceScore: 21, corroborationScore: 16, prompt: "must-not-leak" },
+      }],
       qualityEvaluation: {
         evaluationVersion: "v1",
         freshnessScore: 92,
@@ -62,6 +75,11 @@ describe("agent observability service", () => {
         }),
       ],
       evaluation: expect.objectContaining({ freshnessScore: 92 }),
+      eventDecisions: [expect.objectContaining({
+        phase: "final_selection",
+        decision: "selected",
+        scoreDetails: { freshnessScore: 41, sourceScore: 21, corroborationScore: 16 },
+      })],
     });
     expect(JSON.stringify(snapshot)).not.toContain("private-token");
     expect(JSON.stringify(snapshot)).not.toContain("must-not-leak");

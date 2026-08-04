@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { buildWebSearchDigestFromOutput, collectRetrievedWebSources, parseWebSearchDigestOutput, toRssWebSearchCandidate } from "./web-search-digest-agent";
+import {
+  buildWebSearchDigestFromOutput,
+  collectRetrievedWebSources,
+  getClusterSelectionScore,
+  parseWebSearchDigestOutput,
+  toRssWebSearchCandidate,
+} from "./web-search-digest-agent";
 
 const messages = [
   {
@@ -50,6 +56,27 @@ describe("web search digest agent", () => {
       sourceName: "中国新闻网",
       publishedAt: "2026-08-04T00:00:00.000Z",
     }));
+  });
+
+  it("scores fresher and better corroborated events above older single-source events", () => {
+    const referenceTime = new Date("2026-08-04T12:00:00.000Z").valueOf();
+    const currentMultiSource = getClusterSelectionScore({
+      id: "event-current",
+      headline: "当前多源事件",
+      candidates: [{}, {}, {}, {}] as never[],
+      sourceDomainCount: 3,
+      latestPublishedAt: "2026-08-04T06:00:00.000Z",
+    }, referenceTime);
+    const staleSingleSource = getClusterSelectionScore({
+      id: "event-stale",
+      headline: "过期单来源事件",
+      candidates: [{}] as never[],
+      sourceDomainCount: 1,
+      latestPublishedAt: "2026-08-01T12:00:00.000Z",
+    }, referenceTime);
+
+    expect(currentMultiSource.score).toBeGreaterThan(staleSingleSource.score);
+    expect(currentMultiSource.details).toMatchObject({ freshnessScore: 41, sourceScore: 21, corroborationScore: 16 });
   });
 
   it("extracts a JSON digest from an Agnes text-wrapped response", () => {
