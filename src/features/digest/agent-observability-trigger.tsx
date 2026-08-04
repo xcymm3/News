@@ -232,7 +232,6 @@ function QualityPanel({ evaluation }: { evaluation?: AgentQualityEvaluationSnaps
         <QualityMetric hint="来源发布时间" label="时效性" value={formatScore(evaluation.freshnessScore)} />
         <QualityMetric hint="至少两域名" label="多源覆盖" value={formatScore(evaluation.multiSourceCoverage)} />
         <QualityMetric hint="标题相似度检查" label="去重率" value={formatScore(evaluation.duplicateFreeRate)} />
-        <QualityMetric hint="平均独立域名" label="每条来源" value={evaluation.averageSourcesPerStory.toFixed(1)} />
       </div>
       <p className={styles.evaluationNote}>指标衡量流程健康度与来源结构，不代表对新闻事实的独立核验。</p>
     </section>
