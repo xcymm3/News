@@ -24,7 +24,6 @@ import {
 import {
   clusterWebSearchCandidates,
   selectDistinctDomainCandidates,
-  selectMultiSourceClusters,
   type WebEventCluster,
 } from "@/features/web-search/event-clustering";
 import { WebSearchProviderError } from "@/features/web-search/web-search-provider";
@@ -32,9 +31,9 @@ import { createWebResearchTools } from "@/features/web-search/web-research-tools
 import { getLatestChineseRssNews, type RawNewsArticle } from "@/features/news-source/live-news-source";
 
 const MAX_WEB_AGENT_STORIES = 12;
+const MAX_MODEL_CANDIDATES = 20;
 const MAX_DOCUMENT_CONTEXT_CHARACTERS = 3_000;
 const MAX_RESULTS_PER_TOPIC = 20;
-const MAX_CANDIDATE_CLUSTERS = 18;
 const MINIMUM_SOURCE_DOMAINS_PER_EVENT = 2;
 const MAX_SOURCES_PER_EVENT = 5;
 const LLM_REQUEST_TIMEOUT_MS = 90_000;
@@ -100,7 +99,8 @@ type SynthesisResult = {
   output: WebDigestOutput;
   usage: ModelUsage;
   retryCount: number;
-  fallbackEventCount: number;
+  rejectedClusters: RetrievedEventCluster[];
+  validClusters: RetrievedEventCluster[];
   failureReasons: string[];
 };
 
@@ -824,25 +824,26 @@ async function retrieveEventClusters(
     searchCandidates.length,
     async () => {
       const allClusters = clusterWebSearchCandidates(searchCandidates);
-      const insufficientSourceClusters = allClusters.filter((cluster) => cluster.sourceDomainCount < MINIMUM_SOURCE_DOMAINS_PER_EVENT);
-      const eligibleClusters = selectMultiSourceClusters(allClusters, {
-        minimumSourceDomains: MINIMUM_SOURCE_DOMAINS_PER_EVENT,
-        maximumClusters: Number.MAX_SAFE_INTEGER,
-      }).map((cluster) => ({ cluster, ...getClusterSelectionScore(cluster) }))
+      const rankedClusters = allClusters.map((cluster) => ({ cluster, ...getClusterSelectionScore(cluster) }))
         .sort((left, right) => right.score - left.score || right.cluster.sourceDomainCount - left.cluster.sourceDomainCount);
-      const selectedClusters = eligibleClusters.slice(0, MAX_CANDIDATE_CLUSTERS);
-      const cutoffClusters = eligibleClusters.slice(MAX_CANDIDATE_CLUSTERS);
+      const multiSourceClusters = rankedClusters.filter(({ cluster }) => cluster.sourceDomainCount >= MINIMUM_SOURCE_DOMAINS_PER_EVENT);
+      const singleSourceClusters = rankedClusters.filter(({ cluster }) => cluster.sourceDomainCount < MINIMUM_SOURCE_DOMAINS_PER_EVENT);
+      const selectedMultiSourceClusters = multiSourceClusters.slice(0, MAX_MODEL_CANDIDATES);
+      const requiredReserveCount = Math.max(MAX_MODEL_CANDIDATES - selectedMultiSourceClusters.length, 0);
+      const selectedSingleSourceReserves = singleSourceClusters.slice(0, requiredReserveCount);
+      const selectedClusters = [...selectedMultiSourceClusters, ...selectedSingleSourceReserves];
+      const cutoffClusters = [
+        ...multiSourceClusters.slice(MAX_MODEL_CANDIDATES),
+        ...singleSourceClusters.slice(requiredReserveCount),
+      ];
 
       await recordTrackedEventDecisions(tracker, [
-        ...insufficientSourceClusters.map((cluster) => toEventDecision(cluster, {
-          phase: "CLUSTER",
-          decision: "REJECTED",
-          reason: "INSUFFICIENT_SOURCES",
-        })),
         ...cutoffClusters.map(({ cluster, score, details }) => toEventDecision(cluster, {
           phase: "CLUSTER",
           decision: "REJECTED",
-          reason: "RANKED_BELOW_CANDIDATE_CUTOFF",
+          reason: cluster.sourceDomainCount < MINIMUM_SOURCE_DOMAINS_PER_EVENT
+            ? "INSUFFICIENT_SOURCES"
+            : "RANKED_BELOW_CANDIDATE_CUTOFF",
           score,
           scoreDetails: details,
         })),
@@ -854,7 +855,9 @@ async function retrieveEventClusters(
       outputCount: clusters.length,
       details: {
         minimumSourceDomains: MINIMUM_SOURCE_DOMAINS_PER_EVENT,
-        maximumClusters: MAX_CANDIDATE_CLUSTERS,
+        maximumClusters: MAX_MODEL_CANDIDATES,
+        multiSourceCandidateCount: clusters.filter(({ cluster }) => cluster.sourceDomainCount >= MINIMUM_SOURCE_DOMAINS_PER_EVENT).length,
+        singleSourceReserveCount: clusters.filter(({ cluster }) => cluster.sourceDomainCount < MINIMUM_SOURCE_DOMAINS_PER_EVENT).length,
         insufficientSourceRejectedCount: clusterWebSearchCandidates(searchCandidates)
           .filter((cluster) => cluster.sourceDomainCount < MINIMUM_SOURCE_DOMAINS_PER_EVENT).length,
       },
@@ -960,26 +963,18 @@ function createSynthesisInput(digestDate: string, cluster: RetrievedEventCluster
   });
 }
 
-export function createFallbackWebDigestStory(cluster: RetrievedEventCluster): WebDigestStoryOutput {
-  const sourceNames = [...new Set(cluster.sources.map((source) => source.sourceName))];
-  const sourceSummaries = cluster.sources.map((source, index) => (
-    `${index + 1}. ${source.sourceName}：${source.title}。${source.supportingExcerpt.slice(0, 220)}`
-  ));
+function isCompliantWebDigestStory(value: unknown): value is WebDigestStoryOutput {
+  if (!isRecord(value)) {
+    return false;
+  }
 
-  return {
-    headline: cluster.cluster.headline,
-    summary: [
-      "### 已核实进展",
-      `本事件由 ${sourceNames.join("、")} 等 ${sourceNames.length} 个独立网站的已读取材料共同指向。以下内容由程序依据原文片段整理，未补充材料之外的事实。`,
-      "### 各来源材料要点",
-      sourceSummaries.join("\n"),
-      "### 阅读边界",
-      "模型未能按要求返回结构化摘要，因此本条保留多源原文的可核实要点与出处，供后续更新继续补充。",
-    ].join("\n\n"),
-    whyItMatters: `该事件已具备 ${sourceNames.length} 个独立来源的交叉材料；当前以可核实要点发布，等待后续模型或新材料补全解读。`,
-    importanceScore: cluster.selectionScore,
-    sourceUrls: cluster.sources.map((source) => source.canonicalUrl),
-  };
+  return Boolean(
+    getString(value.headline)
+    && getString(value.summary)
+    && getString(value.whyItMatters)
+    && typeof value.importanceScore === "number"
+    && Array.isArray(value.sourceUrls),
+  );
 }
 
 async function synthesizeDigestOutput(
@@ -996,8 +991,8 @@ async function synthesizeDigestOutput(
       const output = parseWebSearchDigestOutput(getMessageText(finalMessage.content));
       const firstStory = Array.isArray(output.stories) && isRecord(output.stories[0]) ? output.stories[0] : null;
 
-      if (!firstStory) {
-        throw new Error("模型未返回可解析的事件摘要。");
+      if (!isCompliantWebDigestStory(firstStory)) {
+        throw new Error("模型未返回符合日报结构的 JSON 事件。");
       }
 
       return {
@@ -1009,32 +1004,25 @@ async function synthesizeDigestOutput(
       };
     }, MAX_MODEL_RETRIES, "DeepSeek 综合事件失败。");
 
-    if (result.value) {
-      return {
-        story: result.value.story,
-        usage: result.value.usage,
-        retryCount: result.retryCount,
-        failureReasons: result.failureReasons,
-        usedFallback: false,
-      };
-    }
-
     return {
-      story: createFallbackWebDigestStory(cluster),
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      cluster,
+      story: result.value?.story ?? null,
+      usage: result.value?.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       retryCount: result.retryCount,
       failureReasons: result.failureReasons,
-      usedFallback: true,
     };
   });
 
   const usage = sumModelUsage(outputs.map((result) => result.usage));
+  const validOutputs = outputs.filter((result): result is typeof result & { story: WebDigestStoryOutput } => result.story !== null);
+  const rejectedOutputs = outputs.filter((result) => result.story === null);
 
   return {
-    output: { stories: outputs.map((result) => result.story) },
+    output: { stories: validOutputs.map((result) => result.story) },
     usage,
     retryCount: outputs.reduce((total, result) => total + result.retryCount, 0),
-    fallbackEventCount: outputs.filter((result) => result.usedFallback).length,
+    validClusters: validOutputs.map((result) => result.cluster),
+    rejectedClusters: rejectedOutputs.map((result) => result.cluster),
     failureReasons: outputs.flatMap((result) => result.failureReasons),
   };
 }
@@ -1091,12 +1079,37 @@ export async function runWebSearchDigest(
           totalTokens: result.usage.totalTokens,
           estimatedCostCny: estimateModelCostCny(result.usage),
           llmRetryCount: result.retryCount,
-          llmFallbackEventCount: result.fallbackEventCount,
+          llmRejectedEventCount: result.rejectedClusters.length,
           llmFailureReason: summarizeFailureReasons(result.failureReasons),
         },
       }),
       { model: configuredModel.model, maxRetriesPerEvent: MAX_MODEL_RETRIES },
     );
+    await recordTrackedEventDecisions(tracker, [
+      ...output.rejectedClusters.map((cluster) => toEventDecision(cluster.cluster, {
+        phase: "FINAL_SELECTION",
+        decision: "REJECTED",
+        reason: "MODEL_OUTPUT_INVALID",
+        readableSourceCount: new Set(cluster.sources.map((source) => source.sourceDomain)).size,
+        score: cluster.selectionScore,
+        scoreDetails: cluster.selectionDetails,
+      })),
+      ...output.validClusters.map((cluster, index) => toEventDecision(cluster.cluster, {
+        phase: "FINAL_SELECTION",
+        decision: index < MAX_WEB_AGENT_STORIES ? "SELECTED" : "REJECTED",
+        reason: index < MAX_WEB_AGENT_STORIES ? "TOP_SELECTION_SCORE" : "RANKED_BELOW_FINAL_CUTOFF",
+        readableSourceCount: new Set(cluster.sources.map((source) => source.sourceDomain)).size,
+        score: cluster.selectionScore,
+        scoreDetails: cluster.selectionDetails,
+      })),
+    ]);
+    if (output.validClusters.length < MAX_WEB_AGENT_STORIES) {
+      throw new WebSearchDigestAgentError(
+        "WEB_RESEARCH_INVALID_RESPONSE",
+        502,
+        `DeepSeek 仅返回 ${output.validClusters.length} 条合规事件，未达到发布所需的 ${MAX_WEB_AGENT_STORIES} 条。`,
+      );
+    }
     const digest = await runObservedStage(
       tracker,
       "VALIDATE",

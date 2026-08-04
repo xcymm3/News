@@ -38,6 +38,8 @@ const STAGE_DETAIL_LABELS: Record<string, string> = {
   searchRetryCount: "搜索重试次数",
   searchFailureReason: "搜索失败原因",
   insufficientSourceRejectedCount: "来源不足淘汰",
+  multiSourceCandidateCount: "双来源候选",
+  singleSourceReserveCount: "单来源候补",
   fetchRetryCount: "读取重试次数",
   fetchFailedCount: "读取失败条数",
   fetchFailureReason: "读取失败原因",
@@ -46,7 +48,7 @@ const STAGE_DETAIL_LABELS: Record<string, string> = {
   totalTokens: "总 Token",
   estimatedCostCny: "费用估算（元）",
   llmRetryCount: "模型重试次数",
-  llmFallbackEventCount: "规则回退事件",
+  llmRejectedEventCount: "模型淘汰事件",
   llmFailureReason: "模型失败原因",
   maxRetriesPerEvent: "单事件最大重试",
   minimumSourceDomains: "最低来源数",
@@ -59,8 +61,12 @@ const STAGE_DETAIL_LABELS: Record<string, string> = {
 
 const EVENT_REASON_LABELS: Record<string, string> = {
   INSUFFICIENT_SOURCES: "独立来源不足 2 个",
+  NO_READABLE_SOURCES: "没有可读取的原文材料",
   RANKED_BELOW_CANDIDATE_CUTOFF: "候选阶段评分未进入前列",
   INSUFFICIENT_READABLE_SOURCES: "可读取的独立来源不足 2 个",
+  MODEL_CANDIDATE: "进入 DeepSeek 的 20 条候选",
+  RANKED_BELOW_MODEL_CUTOFF: "未进入 DeepSeek 的 20 条候选",
+  MODEL_OUTPUT_INVALID: "DeepSeek 未返回合规 JSON",
   TOP_SELECTION_SCORE: "综合评分进入最终选题",
   RANKED_BELOW_FINAL_CUTOFF: "综合评分未进入最终选题",
 };
