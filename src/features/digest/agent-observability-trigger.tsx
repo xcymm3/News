@@ -498,7 +498,7 @@ export function AgentObservabilityTrigger() {
     <>
       <button className={styles.trigger} onClick={openDialog} type="button">
         <ActivityIcon />
-        <span>生成详情</span>
+        <span>运行详情</span>
       </button>
 
       <dialog
@@ -516,9 +516,9 @@ export function AgentObservabilityTrigger() {
           <header className={styles.header}>
             <div>
               <p className={styles.eyebrow}>AGENT OBSERVABILITY</p>
-              <h2 className={styles.title} id="agent-observability-title">生成详情</h2>
+              <h2 className={styles.title} id="agent-observability-title">运行详情</h2>
             </div>
-            <button aria-label="关闭生成详情" className={styles.closeButton} onClick={closeDialog} type="button">
+            <button aria-label="关闭运行详情" className={styles.closeButton} onClick={closeDialog} type="button">
               <CloseIcon />
             </button>
           </header>

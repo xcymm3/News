@@ -8,6 +8,8 @@
   --color-paper-raised: oklch(98% 0.009 72);
   --color-paper-muted: oklch(91% 0.027 66);
   --color-paper-strong: oklch(86% 0.039 63);
+  --color-panel: oklch(96.8% 0.012 68);
+  --color-panel-strong: oklch(93.4% 0.023 65);
   --color-ink: oklch(24% 0.026 52);
   --color-ink-soft: oklch(35% 0.026 52);
   --color-muted: oklch(49% 0.022 57);
@@ -17,6 +19,7 @@
   --color-accent-ink: var(--color-paper-raised);
   --color-accent-soft: oklch(88% 0.055 52);
   --color-accent-secondary: oklch(58% 0.065 132);
+  --color-accent-quiet: oklch(68% 0.052 46);
   --color-focus: oklch(43% 0.135 258);
   --color-error: oklch(53% 0.165 30);
   --color-success: oklch(48% 0.095 145);
@@ -56,9 +59,11 @@
   --radius-sm: 0.75rem;
   --radius-md: 1.125rem;
   --radius-lg: 1.5rem;
+  --radius-control: 0.625rem;
   --radius-pill: 999px;
   --shadow-float: 0 1.25rem 3.5rem color-mix(in oklch, var(--color-ink) 15%, transparent);
   --shadow-card: 0 0.75rem 2rem color-mix(in oklch, var(--color-ink) 7%, transparent);
+  --shadow-panel: 0 1.5rem 3.5rem color-mix(in oklch, var(--color-ink) 11%, transparent);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);

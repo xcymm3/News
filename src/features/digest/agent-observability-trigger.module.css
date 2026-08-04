@@ -36,15 +36,15 @@
 }
 
 .dialog {
-  inline-size: min(100% - (var(--page-gutter) * 2), 42rem);
+  inline-size: min(100% - (var(--page-gutter) * 2), 54rem);
   max-inline-size: none;
   max-block-size: min(52rem, calc(100dvh - (var(--space-md) * 2)));
   margin: auto;
   padding: 0;
   overflow: auto;
   border: var(--rule-hair) solid var(--color-rule-strong);
-  border-radius: var(--radius-lg);
-  background: var(--color-paper-raised);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
   color: var(--color-ink);
   box-shadow: var(--shadow-float);
 }
@@ -56,7 +56,7 @@
 
 .frame {
   display: grid;
-  gap: var(--space-lg);
+  gap: var(--space-xl);
   padding: var(--space-md);
 }
 
@@ -65,8 +65,10 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-sm);
-  padding-block-end: var(--space-sm);
-  border-block-end: var(--rule-hair) solid var(--color-rule);
+  padding: var(--space-xs);
+  border: var(--rule-hair) solid var(--color-rule);
+  border-radius: var(--radius-control);
+  background: var(--color-paper-raised);
 }
 
 .eyebrow {
@@ -248,8 +250,8 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border: var(--rule-hair) solid var(--color-rule);
-  border-radius: var(--radius-md);
-  background: var(--color-paper);
+  border-radius: var(--radius-control);
+  background: var(--color-paper-raised);
 }
 
 .overviewGrid > div {
@@ -310,7 +312,7 @@
   display: grid;
   grid-template-columns: 1.8rem minmax(0, 1fr);
   gap: var(--space-xs);
-  padding-block: var(--space-xs);
+  padding: var(--space-sm) 0;
 }
 
 .pipelineItem + .pipelineItem {
@@ -318,7 +320,14 @@
 }
 
 .pipelineNumber {
-  padding-block-start: var(--space-3xs);
+  display: grid;
+  place-items: center;
+  inline-size: 1.8rem;
+  block-size: 1.8rem;
+  padding: 0;
+  border: var(--rule-hair) solid var(--color-rule);
+  border-radius: 50%;
+  background: var(--color-paper-raised);
   color: var(--color-accent);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -388,9 +397,10 @@
 }
 
 .stageDetails span {
-  padding: 0.125rem var(--space-2xs);
-  border-radius: var(--radius-pill);
-  background: var(--color-paper-muted);
+  padding: 0.1875rem var(--space-2xs);
+  border: var(--rule-hair) solid var(--color-rule);
+  border-radius: var(--radius-control);
+  background: var(--color-paper-raised);
   color: var(--color-muted);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -418,7 +428,7 @@
   margin-block-start: var(--space-sm);
   overflow: hidden;
   border: var(--rule-hair) solid var(--color-rule);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
 }
 
 .qualityMetric {
@@ -426,7 +436,7 @@
   gap: var(--space-3xs);
   min-inline-size: 0;
   padding: var(--space-sm);
-  background: var(--color-paper);
+  background: var(--color-paper-raised);
 }
 
 .qualityMetric:nth-child(3n + 2),
@@ -482,7 +492,7 @@
   display: flex;
   justify-content: space-between;
   gap: var(--space-sm);
-  padding-block: var(--space-xs);
+  padding-block: var(--space-sm);
   border-block-end: var(--rule-hair) solid var(--color-rule);
 }
 
@@ -532,8 +542,8 @@
   margin-block-start: var(--space-sm);
   padding: var(--space-xs);
   border: var(--rule-hair) solid var(--color-rule);
-  border-radius: var(--radius-md);
-  background: var(--color-paper-muted);
+  border-radius: var(--radius-control);
+  background: var(--color-panel-strong);
 }
 
 .rejectedEvents p,
