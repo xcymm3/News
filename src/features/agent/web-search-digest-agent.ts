@@ -38,6 +38,7 @@ const MAX_CANDIDATE_CLUSTERS = 18;
 const MINIMUM_SOURCE_DOMAINS_PER_EVENT = 2;
 const MAX_SOURCES_PER_EVENT = 5;
 const LLM_REQUEST_TIMEOUT_MS = 90_000;
+const SYNTHESIS_MAX_TOKENS = 4_096;
 const MAX_SEARCH_RETRIES = 1;
 const MAX_FETCH_RETRIES = 1;
 const MAX_MODEL_RETRIES = 1;
@@ -270,11 +271,12 @@ function getDeepSeekDigestModel() {
       apiKey,
       model,
       temperature: 0.2,
-      maxTokens: 3_200,
+      maxTokens: SYNTHESIS_MAX_TOKENS,
       timeout: LLM_REQUEST_TIMEOUT_MS,
       maxRetries: 0,
       modelKwargs: {
         response_format: { type: "json_object" },
+        thinking: { type: "disabled" },
       },
       configuration: { baseURL: baseUrl },
     }),
@@ -546,7 +548,7 @@ export function collectRetrievedWebSources(messages: unknown[]): RetrievedWebSou
   return [...retrievedSources.values()];
 }
 
-function createDigestPrompt(digestDate: string, cluster: RetrievedEventCluster) {
+export function createDigestPrompt(digestDate: string, cluster: RetrievedEventCluster) {
   return [
     `The authoritative application date is ${digestDate}; treat it as the present date for this task.`,
     "The supplied webpages are independent reports of one event from different domains.",
@@ -554,6 +556,7 @@ function createDigestPrompt(digestDate: string, cluster: RetrievedEventCluster) 
     "Return exactly one story in a JSON object with a stories array.",
     "Return valid JSON only. Begin directly with { and never output analysis, explanations, Markdown fences, or <think> content.",
     "Each story must include headline, summary, whyItMatters, importanceScore (1-100), and sourceUrls (an array of fetched source URLs).",
+    "Use this exact JSON shape: {\"stories\":[{\"headline\":\"简短中文标题\",\"summary\":\"中文摘要，可使用 \\n 表示分段\",\"whyItMatters\":\"简短中文影响说明\",\"importanceScore\":80,\"sourceUrls\":[\"https://example.com/source\"]}]}. Replace every example value with evidence from the supplied sources.",
     "Write Chinese. The summary should be roughly 1,600-2,000 Chinese characters when the evidence supports that detail, with 3-5 short Markdown paragraphs. Use ### short section headings, - lists, and **bold** for key facts when helpful. Every ### heading must occupy its own line, followed by a blank line; every list item must also occupy its own line. Keep whyItMatters to 100-180 Chinese characters.",
     "Synthesize only facts confirmed across the supplied sources. If details differ, state the uncertainty briefly. Cite every supplied source URL exactly as given; do not invent or alter URLs.",
   ].join(" ");

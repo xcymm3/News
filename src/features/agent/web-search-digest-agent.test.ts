@@ -4,6 +4,7 @@ import {
   buildWebSearchDigestFromOutput,
   collectRetrievedWebSources,
   createFallbackWebDigestStory,
+  createDigestPrompt,
   getClusterSelectionScore,
   parseWebSearchDigestOutput,
   toRssWebSearchCandidate,
@@ -117,6 +118,24 @@ describe("web search digest agent", () => {
       sourceUrls: ["https://source-a.example.com/event", "https://source-b.example.com/event"],
     });
     expect(fallback.summary).toContain("模型未能按要求返回结构化摘要");
+  });
+
+  it("gives DeepSeek an explicit JSON object example for structured output", () => {
+    const prompt = createDigestPrompt("2026-08-04", {
+      cluster: {
+        id: "event-json",
+        headline: "JSON 输出测试事件",
+        candidates: [{}, {}] as never[],
+        sourceDomainCount: 2,
+        latestPublishedAt: "2026-08-04T06:00:00.000Z",
+      },
+      selectionScore: 80,
+      selectionDetails: { freshnessScore: 40, sourceScore: 14, corroborationScore: 8, ageHours: 8 },
+      sources: [],
+    });
+
+    expect(prompt).toContain("Use this exact JSON shape");
+    expect(prompt).toContain("\"stories\"");
   });
 
   it("extracts a JSON digest from an Agnes text-wrapped response", () => {
