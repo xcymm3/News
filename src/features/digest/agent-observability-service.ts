@@ -57,7 +57,7 @@ const SAFE_OBSERVABILITY_DETAIL_KEYS = new Set([
   "totalTokens",
   "estimatedCostCny",
   "llmRetryCount",
-  "llmFailedEventCount",
+  "llmFallbackEventCount",
   "llmFailureReason",
   "freshnessScore",
   "sourceScore",

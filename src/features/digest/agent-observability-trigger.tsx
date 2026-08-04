@@ -46,7 +46,7 @@ const STAGE_DETAIL_LABELS: Record<string, string> = {
   totalTokens: "总 Token",
   estimatedCostCny: "费用估算（元）",
   llmRetryCount: "模型重试次数",
-  llmFailedEventCount: "模型失败事件",
+  llmFallbackEventCount: "规则回退事件",
   llmFailureReason: "模型失败原因",
   maxRetriesPerEvent: "单事件最大重试",
   minimumSourceDomains: "最低来源数",

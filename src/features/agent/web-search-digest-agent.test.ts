@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildWebSearchDigestFromOutput,
   collectRetrievedWebSources,
+  createFallbackWebDigestStory,
   getClusterSelectionScore,
   parseWebSearchDigestOutput,
   toRssWebSearchCandidate,
@@ -77,6 +78,45 @@ describe("web search digest agent", () => {
 
     expect(currentMultiSource.score).toBeGreaterThan(staleSingleSource.score);
     expect(currentMultiSource.details).toMatchObject({ freshnessScore: 41, sourceScore: 21, corroborationScore: 16 });
+  });
+
+  it("keeps a publishable multi-source fallback when the model output is invalid", () => {
+    const fallback = createFallbackWebDigestStory({
+      cluster: {
+        id: "event-fallback",
+        headline: "多来源测试事件",
+        candidates: [{}, {}] as never[],
+        sourceDomainCount: 2,
+        latestPublishedAt: "2026-08-04T06:00:00.000Z",
+      },
+      selectionScore: 79,
+      selectionDetails: { freshnessScore: 40, sourceScore: 14, corroborationScore: 8, ageHours: 8 },
+      sources: [
+        {
+          canonicalUrl: "https://source-a.example.com/event",
+          sourceName: "来源 A",
+          sourceDomain: "source-a.example.com",
+          title: "来源 A 对事件的报道",
+          publishedAt: "2026-08-04T06:00:00.000Z",
+          supportingExcerpt: "来源 A 的已读取正文材料，提供了足够的可核实信息用于回退摘要。",
+        },
+        {
+          canonicalUrl: "https://source-b.example.com/event",
+          sourceName: "来源 B",
+          sourceDomain: "source-b.example.com",
+          title: "来源 B 对事件的报道",
+          publishedAt: "2026-08-04T05:00:00.000Z",
+          supportingExcerpt: "来源 B 的已读取正文材料，提供了独立来源的补充信息与上下文。",
+        },
+      ],
+    });
+
+    expect(fallback).toMatchObject({
+      headline: "多来源测试事件",
+      importanceScore: 79,
+      sourceUrls: ["https://source-a.example.com/event", "https://source-b.example.com/event"],
+    });
+    expect(fallback.summary).toContain("模型未能按要求返回结构化摘要");
   });
 
   it("extracts a JSON digest from an Agnes text-wrapped response", () => {

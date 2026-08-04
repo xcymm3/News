@@ -76,7 +76,7 @@ export type RetrievedWebSource = {
   supportingExcerpt: string;
 };
 
-type RetrievedEventCluster = {
+export type RetrievedEventCluster = {
   cluster: WebEventCluster;
   sources: RetrievedWebSource[];
   selectionScore: number;
@@ -99,7 +99,7 @@ type SynthesisResult = {
   output: WebDigestOutput;
   usage: ModelUsage;
   retryCount: number;
-  failedEventCount: number;
+  fallbackEventCount: number;
   failureReasons: string[];
 };
 
@@ -273,6 +273,9 @@ function getDeepSeekDigestModel() {
       maxTokens: 3_200,
       timeout: LLM_REQUEST_TIMEOUT_MS,
       maxRetries: 0,
+      modelKwargs: {
+        response_format: { type: "json_object" },
+      },
       configuration: { baseURL: baseUrl },
     }),
   };
@@ -954,6 +957,28 @@ function createSynthesisInput(digestDate: string, cluster: RetrievedEventCluster
   });
 }
 
+export function createFallbackWebDigestStory(cluster: RetrievedEventCluster): WebDigestStoryOutput {
+  const sourceNames = [...new Set(cluster.sources.map((source) => source.sourceName))];
+  const sourceSummaries = cluster.sources.map((source, index) => (
+    `${index + 1}. ${source.sourceName}：${source.title}。${source.supportingExcerpt.slice(0, 220)}`
+  ));
+
+  return {
+    headline: cluster.cluster.headline,
+    summary: [
+      "### 已核实进展",
+      `本事件由 ${sourceNames.join("、")} 等 ${sourceNames.length} 个独立网站的已读取材料共同指向。以下内容由程序依据原文片段整理，未补充材料之外的事实。`,
+      "### 各来源材料要点",
+      sourceSummaries.join("\n"),
+      "### 阅读边界",
+      "模型未能按要求返回结构化摘要，因此本条保留多源原文的可核实要点与出处，供后续更新继续补充。",
+    ].join("\n\n"),
+    whyItMatters: `该事件已具备 ${sourceNames.length} 个独立来源的交叉材料；当前以可核实要点发布，等待后续模型或新材料补全解读。`,
+    importanceScore: cluster.selectionScore,
+    sourceUrls: cluster.sources.map((source) => source.canonicalUrl),
+  };
+}
+
 async function synthesizeDigestOutput(
   client: ChatOpenAI,
   digestDate: string,
@@ -981,16 +1006,32 @@ async function synthesizeDigestOutput(
       };
     }, MAX_MODEL_RETRIES, "DeepSeek 综合事件失败。");
 
-    return result;
+    if (result.value) {
+      return {
+        story: result.value.story,
+        usage: result.value.usage,
+        retryCount: result.retryCount,
+        failureReasons: result.failureReasons,
+        usedFallback: false,
+      };
+    }
+
+    return {
+      story: createFallbackWebDigestStory(cluster),
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      retryCount: result.retryCount,
+      failureReasons: result.failureReasons,
+      usedFallback: true,
+    };
   });
 
-  const usage = sumModelUsage(outputs.flatMap((result) => result.value ? [result.value.usage] : []));
+  const usage = sumModelUsage(outputs.map((result) => result.usage));
 
   return {
-    output: { stories: outputs.flatMap((result) => result.value ? [result.value.story] : []) },
+    output: { stories: outputs.map((result) => result.story) },
     usage,
     retryCount: outputs.reduce((total, result) => total + result.retryCount, 0),
-    failedEventCount: outputs.filter((result) => result.value === null).length,
+    fallbackEventCount: outputs.filter((result) => result.usedFallback).length,
     failureReasons: outputs.flatMap((result) => result.failureReasons),
   };
 }
@@ -1047,7 +1088,7 @@ export async function runWebSearchDigest(
           totalTokens: result.usage.totalTokens,
           estimatedCostCny: estimateModelCostCny(result.usage),
           llmRetryCount: result.retryCount,
-          llmFailedEventCount: result.failedEventCount,
+          llmFallbackEventCount: result.fallbackEventCount,
           llmFailureReason: summarizeFailureReasons(result.failureReasons),
         },
       }),
