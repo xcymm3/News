@@ -423,29 +423,6 @@
   line-height: 1.4;
 }
 
-.detailDisclosure {
-  margin: var(--space-2xs) 0 0;
-  color: var(--color-muted);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-}
-
-.detailDisclosure summary {
-  inline-size: fit-content;
-  color: var(--color-ink-soft);
-  cursor: pointer;
-  font-weight: 650;
-}
-
-.detailDisclosure summary:hover {
-  color: var(--color-accent);
-}
-
-.detailDisclosure[open] summary {
-  margin-block-end: var(--space-2xs);
-}
-
 .stageError {
   padding-inline-start: var(--space-xs);
   border-inline-start: 0.15rem solid var(--color-error);
@@ -608,16 +585,6 @@
   line-height: 1.5;
 }
 
-.rejectionSampleList {
-  display: grid;
-  gap: 0.25rem;
-  margin: var(--space-sm) 0 0;
-  padding-inline-start: 1.1rem;
-  color: var(--color-muted);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-}
 
 .historyItem {
   justify-content: space-between;

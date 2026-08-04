@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AgentObservabilitySnapshot,
   AgentQualityEvaluationSnapshot,
-  AgentRunEventDecisionSnapshot,
   AgentRunSnapshot,
   AgentRunStageSnapshot,
 } from "./agent-observability-contract";
@@ -57,18 +56,6 @@ const STAGE_DETAIL_LABELS: Record<string, string> = {
   sourceDocumentCount: "来源网页",
   model: "模型",
   provider: "提供方",
-};
-
-const EVENT_REASON_LABELS: Record<string, string> = {
-  INSUFFICIENT_SOURCES: "独立来源不足 2 个",
-  NO_READABLE_SOURCES: "没有可读取的原文材料",
-  RANKED_BELOW_CANDIDATE_CUTOFF: "候选阶段评分未进入前列",
-  INSUFFICIENT_READABLE_SOURCES: "可读取的独立来源不足 2 个",
-  MODEL_CANDIDATE: "进入 DeepSeek 的 20 条候选",
-  RANKED_BELOW_MODEL_CUTOFF: "未进入 DeepSeek 的 20 条候选",
-  MODEL_OUTPUT_INVALID: "DeepSeek 未返回合规 JSON",
-  TOP_SELECTION_SCORE: "综合评分进入最终选题",
-  RANKED_BELOW_FINAL_CUTOFF: "综合评分未进入最终选题",
 };
 
 const STAGE_HIGHLIGHT_KEYS: Partial<Record<AgentRunStageSnapshot["stage"], string[]>> = {
@@ -252,85 +239,6 @@ function QualityPanel({ evaluation }: { evaluation?: AgentQualityEvaluationSnaps
   );
 }
 
-function getEventDecisionStatusLabel(decision: AgentRunEventDecisionSnapshot["decision"]) {
-  return decision === "selected" ? "入选" : "淘汰";
-}
-
-function formatDecisionScoreDetails(details?: AgentRunEventDecisionSnapshot["scoreDetails"]) {
-  if (!details) {
-    return "—";
-  }
-
-  const freshness = typeof details.freshnessScore === "number" ? `时效 ${details.freshnessScore}/45` : null;
-  const source = typeof details.sourceScore === "number" ? `多源 ${details.sourceScore}/35` : null;
-  const corroboration = typeof details.corroborationScore === "number" ? `佐证 ${details.corroborationScore}/20` : null;
-
-  return [freshness, source, corroboration].filter(Boolean).join(" · ") || "—";
-}
-
-function EventDecisionItem({ item }: { item: AgentRunEventDecisionSnapshot }) {
-  return (
-    <li className={styles.decisionItem}>
-      <div>
-        <p className={styles.decisionHeadline}>{item.headline}</p>
-        <p className={styles.decisionMeta}>{formatDecisionScoreDetails(item.scoreDetails)} · 来源 {item.sourceDomainCount} 个</p>
-      </div>
-      <div className={styles.decisionSide}>
-        <strong>{item.score ?? "—"}</strong>
-        <span className={`${styles.statusBadge} ${item.decision === "selected" ? styles.statussucceeded : styles.statusfailed}`}>{getEventDecisionStatusLabel(item.decision)}</span>
-      </div>
-    </li>
-  );
-}
-
-function EventDecisionPanel({ decisions }: { decisions: AgentRunEventDecisionSnapshot[] }) {
-  const finalSelection = decisions.filter((decision) => decision.phase === "final_selection");
-  const selectedEvents = finalSelection.filter((item) => item.decision === "selected");
-  const rejectedAtFinalSelection = finalSelection.filter((item) => item.decision === "rejected");
-  const rejectedForSources = decisions.filter((decision) => (
-    decision.decision === "rejected"
-    && (decision.reason === "INSUFFICIENT_SOURCES" || decision.reason === "INSUFFICIENT_READABLE_SOURCES")
-  ));
-
-  return (
-    <section className={styles.section} aria-labelledby="selection-heading">
-      <div className={styles.sectionHeading}>
-        <p className={styles.sectionIndex}>03</p>
-        <h3 id="selection-heading">选题决策</h3>
-        <span className={styles.historyCount}>最终 {selectedEvents.length} 条</span>
-      </div>
-      {decisions.length === 0 ? (
-        <p className={styles.mutedMessage}>旧运行没有保存事件级决策。下一次运行会记录候选淘汰与最终评分。</p>
-      ) : (
-        <>
-          <p className={styles.decisionIntro}>按时效、多源覆盖与佐证数量评分；以下展示得分最高的 3 条入选事件。</p>
-          <ol className={styles.decisionList}>
-            {selectedEvents.slice(0, 3).map((item) => <EventDecisionItem item={item} key={`${item.phase}-${item.candidateId}`} />)}
-          </ol>
-          <div className={styles.rejectedEvents}>
-            <p>候选淘汰：来源不足 {rejectedForSources.length} 个 · 最终评分未入选 {rejectedAtFinalSelection.length} 个</p>
-          </div>
-          {(finalSelection.length > 3 || rejectedForSources.length > 0) && (
-            <details className={styles.detailDisclosure}>
-              <summary>查看全部选题决策与淘汰样本</summary>
-              <ol className={styles.decisionList}>
-                {finalSelection.map((item) => <EventDecisionItem item={item} key={`${item.phase}-${item.candidateId}`} />)}
-              </ol>
-              {rejectedForSources.length > 0 && (
-                <ul className={styles.rejectionSampleList}>
-                  {rejectedForSources.slice(0, 8).map((item) => (
-                    <li key={`${item.phase}-${item.candidateId}`}>{item.headline} · {EVENT_REASON_LABELS[item.reason]}</li>
-                  ))}
-                </ul>
-              )}
-            </details>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
 function PipelinePanel({ run }: { run: AgentRunSnapshot }) {
   const stageByName = new Map(run.stages.map((stage) => [stage.stage, stage]));
 
@@ -348,7 +256,6 @@ function PipelinePanel({ run }: { run: AgentRunSnapshot }) {
           const highlightedDetails = highlightKeys.flatMap((key) => (
             stage?.details && key in stage.details ? [[key, stage.details[key]] as const] : []
           ));
-          const remainingDetails = Object.entries(stage?.details ?? {}).filter(([key]) => !highlightKeys.includes(key));
 
           return (
             <li className={styles.pipelineItem} key={definition.stage}>
@@ -375,16 +282,6 @@ function PipelinePanel({ run }: { run: AgentRunSnapshot }) {
                   </div>
                 )}
                 {stage?.errorMessage && <p className={styles.stageError}>{stage.errorMessage}</p>}
-                {remainingDetails.length > 0 && (
-                  <details className={styles.detailDisclosure}>
-                    <summary>查看 {remainingDetails.length} 项运行参数</summary>
-                    <div className={styles.stageDetails}>
-                      {remainingDetails.map(([key, value]) => (
-                        <span key={key}>{STAGE_DETAIL_LABELS[key] ?? key}：{formatStageDetailValue(key, value)}</span>
-                      ))}
-                    </div>
-                  </details>
-                )}
               </div>
             </li>
           );
@@ -420,24 +317,6 @@ function HistoryPanel({ snapshot }: { snapshot: AgentObservabilitySnapshot }) {
               </li>
             ))}
           </ol>
-          {snapshot.history.length > 3 && (
-            <details className={styles.detailDisclosure}>
-              <summary>查看其余 {snapshot.history.length - 3} 次运行</summary>
-              <ol className={styles.historyList}>
-                {snapshot.history.slice(3).map((run) => (
-                  <li className={styles.historyItem} key={run.id}>
-                    <div>
-                      <p className={styles.historyDate}>{run.digestDate}</p>
-                      <p className={styles.historyMeta}>{getTriggerLabel(run.trigger)} · {formatDateTime(run.startedAt)} · {formatDuration(run.totalDurationMs)}</p>
-                    </div>
-                    <div className={styles.historySide}>
-                      <span className={`${styles.statusBadge} ${styles[`status${run.status}`]}`}>{getRunStatusLabel(run.status)}</span>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </details>
-          )}
         </>
       )}
     </section>
@@ -474,7 +353,6 @@ function DashboardContent({ snapshot }: { snapshot: AgentObservabilitySnapshot }
         {run.errorMessage && <p className={styles.runError}>{run.errorMessage}</p>}
       </section>
       <PipelinePanel run={run} />
-      <EventDecisionPanel decisions={run.eventDecisions} />
       <QualityPanel evaluation={run.evaluation} />
       <HistoryPanel snapshot={snapshot} />
     </>
