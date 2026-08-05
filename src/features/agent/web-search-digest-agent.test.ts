@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { buildWebSearchDigestFromOutput, collectRetrievedWebSources, parseWebSearchDigestOutput } from "./web-search-digest-agent";
+import {
+  buildWebSearchDigestFromOutput,
+  collectRetrievedWebSources,
+  createDigestPrompt,
+  getClusterSelectionScore,
+  parseWebSearchDigestOutput,
+  toRssWebSearchCandidate,
+} from "./web-search-digest-agent";
 
 const messages = [
   {
@@ -29,6 +36,68 @@ const messages = [
 ];
 
 describe("web search digest agent", () => {
+  it("normalizes a Chinese RSS article into a web research candidate", () => {
+    expect(toRssWebSearchCandidate({
+      externalId: "rss-1",
+      canonicalUrl: "https://rss.example.com/articles/1?utm_source=feed",
+      title: " RSS 国际新闻标题 ",
+      excerpt: "RSS 摘要。",
+      sourceName: "中国新闻网",
+      sourceDomain: "rss.example.com",
+      language: "zh-CN",
+      publishedAt: "2026-08-04T00:00:00.000Z",
+    }, {
+      allowedDomainSuffixes: [],
+      excludedDomainSuffixes: [],
+      maxResults: 20,
+      maxAgeHours: 72,
+    })).toEqual(expect.objectContaining({
+      title: "RSS 国际新闻标题",
+      canonicalUrl: "https://rss.example.com/articles/1",
+      sourceName: "中国新闻网",
+      publishedAt: "2026-08-04T00:00:00.000Z",
+    }));
+  });
+
+  it("scores fresher and better corroborated events above older single-source events", () => {
+    const referenceTime = new Date("2026-08-04T12:00:00.000Z").valueOf();
+    const currentMultiSource = getClusterSelectionScore({
+      id: "event-current",
+      headline: "当前多源事件",
+      candidates: [{}, {}, {}, {}] as never[],
+      sourceDomainCount: 3,
+      latestPublishedAt: "2026-08-04T06:00:00.000Z",
+    }, referenceTime);
+    const staleSingleSource = getClusterSelectionScore({
+      id: "event-stale",
+      headline: "过期单来源事件",
+      candidates: [{}] as never[],
+      sourceDomainCount: 1,
+      latestPublishedAt: "2026-08-01T12:00:00.000Z",
+    }, referenceTime);
+
+    expect(currentMultiSource.score).toBeGreaterThan(staleSingleSource.score);
+    expect(currentMultiSource.details).toMatchObject({ freshnessScore: 41, sourceScore: 21, corroborationScore: 16 });
+  });
+
+  it("gives DeepSeek an explicit JSON object example for structured output", () => {
+    const prompt = createDigestPrompt("2026-08-04", {
+      cluster: {
+        id: "event-json",
+        headline: "JSON 输出测试事件",
+        candidates: [{}, {}] as never[],
+        sourceDomainCount: 2,
+        latestPublishedAt: "2026-08-04T06:00:00.000Z",
+      },
+      selectionScore: 80,
+      selectionDetails: { freshnessScore: 40, sourceScore: 14, corroborationScore: 8, ageHours: 8 },
+      sources: [],
+    });
+
+    expect(prompt).toContain("Use this exact JSON shape");
+    expect(prompt).toContain("\"stories\"");
+  });
+
   it("extracts a JSON digest from an Agnes text-wrapped response", () => {
     expect(parseWebSearchDigestOutput(JSON.stringify(`已完成资料整理。</think>\n\n{
       "stories": [{"headline": "测试新闻"}]

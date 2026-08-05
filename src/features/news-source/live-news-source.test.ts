@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseRssArticles, type RssNewsSource } from "./live-news-source";
+import { DEFAULT_CHINESE_RSS_SOURCES, parseRssArticles, type RssNewsSource } from "./live-news-source";
 
 const source: RssNewsSource = {
   id: "test-feed",
@@ -10,6 +10,16 @@ const source: RssNewsSource = {
 };
 
 describe("parseRssArticles", () => {
+  it("registers the five Chinese RSS sources used by the web research Agent", () => {
+    expect(DEFAULT_CHINESE_RSS_SOURCES.map((rss) => ({ name: rss.name, maxRecords: rss.maxRecords }))).toEqual([
+      { name: "中国新闻网", maxRecords: 30 },
+      { name: "36氪", maxRecords: 30 },
+      { name: "中央社国际", maxRecords: 20 },
+      { name: "IT之家", maxRecords: 60 },
+      { name: "虎嗅", maxRecords: 22 },
+    ]);
+  });
+
   it("keeps a Chinese RSS item's title, summary, source, URL, and publication time", () => {
     const articles = parseRssArticles(
       `<?xml version="1.0" encoding="UTF-8"?>

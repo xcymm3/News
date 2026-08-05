@@ -6,7 +6,6 @@ import { formatShanghaiDate } from "@/features/digest/digest-service";
 import {
   DigestPersistenceError,
   prismaDigestRepository,
-  recordFailedAgentRun,
 } from "@/features/digest/prisma-digest-repository";
 import {
   canRunWebSearch,
@@ -26,10 +25,6 @@ function noStoreJson(body: unknown, status = 200) {
       "Cache-Control": "no-store",
     },
   });
-}
-
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "定时 Agent 运行失败。";
 }
 
 export async function GET(request: Request) {
@@ -101,18 +96,6 @@ export async function GET(request: Request) {
         },
         503,
       );
-    }
-
-    const message = getErrorMessage(error);
-
-    try {
-      await recordFailedAgentRun({
-        trigger: "cron",
-        digestDate,
-        errorMessage: message,
-      });
-    } catch (recordError) {
-      console.error("Failed to record a scheduled Agent error.", recordError);
     }
 
     console.error("Failed to generate the scheduled news digest.", error);

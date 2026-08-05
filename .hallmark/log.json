@@ -1,6 +1,17 @@
 {
   "builds": [
     {
+      "date": "2026-08-04",
+      "scope": "app",
+      "genre": "modern-minimal",
+      "theme": "custom",
+      "theme_axes": "warm paper / geometric sans / umber",
+      "vibe": "warm modern briefing, editorial reading, technical observability",
+      "macrostructure": "Signal Index / Briefing Reader / Run Workbench",
+      "enrichment": "none",
+      "notes": "建立 design.md 统一三类页面：首页改为信号目录，详情页强化连续阅读，Agent 面板改为紧凑技术工作台。"
+    },
+    {
       "date": "2026-07-28",
       "genre": "modern-minimal",
       "theme": "custom",

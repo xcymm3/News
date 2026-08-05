@@ -3,6 +3,8 @@ import { unstable_cache } from "next/cache";
 
 import {
   AgentRunStatus,
+  AgentRunStageName,
+  AgentRunStageStatus,
   AgentRunTrigger,
   ArticleLanguage,
   DigestStatus,
@@ -12,6 +14,7 @@ import {
 } from "@/generated/prisma/client";
 import { getPrismaClient } from "@/lib/prisma";
 
+import type { AgentRunQualityEvaluation } from "./agent-run-quality-evaluation";
 import type { DigestRepository } from "./digest-service";
 import type { DailyDigest, DigestCitation, DigestStory } from "./types";
 
@@ -19,6 +22,7 @@ type PublishDigestOptions = {
   trigger: "manual" | "cron";
   model?: string;
   retrievedDocumentCount?: number;
+  agentRunId?: string;
 };
 
 type RecordFailedAgentRunOptions = {
@@ -26,6 +30,61 @@ type RecordFailedAgentRunOptions = {
   digestDate: string;
   model?: string;
   errorMessage: string;
+  agentRunId?: string;
+};
+
+const AGENT_RUN_STAGE_POSITIONS = {
+  SEARCH: 1,
+  CLUSTER: 2,
+  FETCH: 3,
+  SYNTHESIZE: 4,
+  VALIDATE: 5,
+  PUBLISH: 6,
+} as const;
+
+const AGENT_RUN_STAGE_NAMES = {
+  SEARCH: AgentRunStageName.SEARCH,
+  CLUSTER: AgentRunStageName.CLUSTER,
+  FETCH: AgentRunStageName.FETCH,
+  SYNTHESIZE: AgentRunStageName.SYNTHESIZE,
+  VALIDATE: AgentRunStageName.VALIDATE,
+  PUBLISH: AgentRunStageName.PUBLISH,
+} as const;
+
+export type AgentRunStageKey = keyof typeof AGENT_RUN_STAGE_POSITIONS;
+
+export type AgentRunStageDetails = Record<string, string | number | boolean | null>;
+
+export type AgentRunEventDecisionInput = {
+  phase: "CLUSTER" | "FETCH" | "FINAL_SELECTION";
+  candidateId: string;
+  headline: string;
+  decision: "SELECTED" | "REJECTED";
+  reason: string;
+  score?: number;
+  sourceDomainCount: number;
+  candidateCount: number;
+  readableSourceCount?: number;
+  latestPublishedAt?: string | null;
+  scoreDetails?: Record<string, string | number | boolean | null>;
+};
+
+type StageStartOptions = {
+  inputCount?: number;
+  details?: AgentRunStageDetails;
+};
+
+type StageCompletionOptions = {
+  outputCount?: number;
+  details?: AgentRunStageDetails;
+};
+
+export type AgentRunTracker = {
+  agentRunId: string;
+  startStage(stage: AgentRunStageKey, options?: StageStartOptions): Promise<void>;
+  completeStage(stage: AgentRunStageKey, options?: StageCompletionOptions): Promise<void>;
+  failStage(stage: AgentRunStageKey, error: unknown): Promise<void>;
+  failRun(error: unknown): Promise<void>;
 };
 
 export class DigestPersistenceError extends Error {
@@ -37,6 +96,205 @@ export class DigestPersistenceError extends Error {
 
 function digestDateToDatabaseDate(digestDate: string) {
   return new Date(`${digestDate}T00:00:00.000Z`);
+}
+
+function toErrorMessage(error: unknown) {
+  return (error instanceof Error ? error.message : "Agent 运行失败。").slice(0, 2_000);
+}
+
+function logObservabilityWriteError(action: string, error: unknown) {
+  console.error(`Failed to ${action} for the Agent observability dashboard.`, error);
+}
+
+export async function startAgentRunTracker({
+  digestDate,
+  trigger,
+}: Pick<RecordFailedAgentRunOptions, "digestDate" | "trigger">): Promise<AgentRunTracker | null> {
+  try {
+    const prisma = getPrismaClient();
+    const agentRun = await prisma.agentRun.create({
+      data: {
+        digestDate: digestDateToDatabaseDate(digestDate),
+        trigger: trigger === "cron" ? AgentRunTrigger.CRON : AgentRunTrigger.MANUAL,
+        status: AgentRunStatus.RUNNING,
+      },
+    });
+    const stageStartedAt = new Map<AgentRunStageKey, number>();
+
+    return {
+      agentRunId: agentRun.id,
+      async startStage(stage, options = {}) {
+        const startedAt = new Date();
+        stageStartedAt.set(stage, startedAt.valueOf());
+
+        try {
+          await prisma.agentRunStage.upsert({
+            where: {
+              agentRunId_stage: {
+                agentRunId: agentRun.id,
+                stage: AGENT_RUN_STAGE_NAMES[stage],
+              },
+            },
+            update: {
+              status: AgentRunStageStatus.RUNNING,
+              inputCount: options.inputCount,
+              details: options.details as Prisma.InputJsonValue | undefined,
+              errorMessage: null,
+              startedAt,
+              completedAt: null,
+              durationMs: null,
+            },
+            create: {
+              agentRunId: agentRun.id,
+              stage: AGENT_RUN_STAGE_NAMES[stage],
+              position: AGENT_RUN_STAGE_POSITIONS[stage],
+              status: AgentRunStageStatus.RUNNING,
+              inputCount: options.inputCount,
+              details: options.details as Prisma.InputJsonValue | undefined,
+              startedAt,
+            },
+          });
+        } catch (error) {
+          logObservabilityWriteError(`start ${stage} stage`, error);
+        }
+      },
+      async completeStage(stage, options = {}) {
+        const completedAt = new Date();
+        const startedAt = stageStartedAt.get(stage);
+
+        try {
+          await prisma.agentRunStage.update({
+            where: {
+              agentRunId_stage: {
+                agentRunId: agentRun.id,
+                stage: AGENT_RUN_STAGE_NAMES[stage],
+              },
+            },
+            data: {
+              status: AgentRunStageStatus.SUCCEEDED,
+              outputCount: options.outputCount,
+              details: options.details as Prisma.InputJsonValue | undefined,
+              durationMs: startedAt === undefined ? undefined : Math.max(completedAt.valueOf() - startedAt, 0),
+              completedAt,
+            },
+          });
+        } catch (error) {
+          logObservabilityWriteError(`complete ${stage} stage`, error);
+        }
+      },
+      async failStage(stage, error) {
+        const completedAt = new Date();
+        const startedAt = stageStartedAt.get(stage);
+
+        try {
+          await prisma.agentRunStage.update({
+            where: {
+              agentRunId_stage: {
+                agentRunId: agentRun.id,
+                stage: AGENT_RUN_STAGE_NAMES[stage],
+              },
+            },
+            data: {
+              status: AgentRunStageStatus.FAILED,
+              errorMessage: toErrorMessage(error),
+              durationMs: startedAt === undefined ? undefined : Math.max(completedAt.valueOf() - startedAt, 0),
+              completedAt,
+            },
+          });
+        } catch (writeError) {
+          logObservabilityWriteError(`fail ${stage} stage`, writeError);
+        }
+      },
+      async failRun(error) {
+        try {
+          await prisma.agentRun.update({
+            where: { id: agentRun.id },
+            data: {
+              status: AgentRunStatus.FAILED,
+              errorMessage: toErrorMessage(error),
+              completedAt: new Date(),
+            },
+          });
+        } catch (writeError) {
+          logObservabilityWriteError("record failed Agent run", writeError);
+        }
+      },
+    };
+  } catch (error) {
+    logObservabilityWriteError("start Agent run", error);
+    return null;
+  }
+}
+
+export async function recordAgentRunQualityEvaluation({
+  agentRunId,
+  evaluation,
+}: {
+  agentRunId: string;
+  evaluation: AgentRunQualityEvaluation;
+}) {
+  try {
+    await getPrismaClient().agentRunQualityEvaluation.upsert({
+      where: { agentRunId },
+      update: {
+        evaluationVersion: evaluation.evaluationVersion,
+        freshnessScore: evaluation.freshnessScore,
+        multiSourceCoverage: evaluation.multiSourceCoverage,
+        averageSourcesPerStory: evaluation.averageSourcesPerStory,
+        sourceDomainCount: evaluation.sourceDomainCount,
+        categoryCoverage: evaluation.categoryCoverage,
+        duplicateFreeRate: evaluation.duplicateFreeRate,
+        citationUrlValidity: evaluation.citationUrlValidity,
+      },
+      create: {
+        agentRunId,
+        evaluationVersion: evaluation.evaluationVersion,
+        freshnessScore: evaluation.freshnessScore,
+        multiSourceCoverage: evaluation.multiSourceCoverage,
+        averageSourcesPerStory: evaluation.averageSourcesPerStory,
+        sourceDomainCount: evaluation.sourceDomainCount,
+        categoryCoverage: evaluation.categoryCoverage,
+        duplicateFreeRate: evaluation.duplicateFreeRate,
+        citationUrlValidity: evaluation.citationUrlValidity,
+      },
+    });
+  } catch (error) {
+    logObservabilityWriteError("record Agent quality evaluation", error);
+  }
+}
+
+export async function recordAgentRunEventDecisions({
+  agentRunId,
+  decisions,
+}: {
+  agentRunId: string;
+  decisions: AgentRunEventDecisionInput[];
+}) {
+  if (decisions.length === 0) {
+    return;
+  }
+
+  try {
+    await getPrismaClient().agentRunEventDecision.createMany({
+      data: decisions.map((decision) => ({
+        agentRunId,
+        phase: decision.phase,
+        candidateId: decision.candidateId,
+        headline: decision.headline.slice(0, 240),
+        decision: decision.decision,
+        reason: decision.reason,
+        score: decision.score,
+        sourceDomainCount: decision.sourceDomainCount,
+        candidateCount: decision.candidateCount,
+        readableSourceCount: decision.readableSourceCount,
+        latestPublishedAt: decision.latestPublishedAt ? toDate(decision.latestPublishedAt, new Date()) : null,
+        scoreDetails: decision.scoreDetails as Prisma.InputJsonValue | undefined,
+      })),
+      skipDuplicates: true,
+    });
+  } catch (error) {
+    logObservabilityWriteError("record Agent event decisions", error);
+  }
 }
 
 function toDate(value: string, fallback: Date) {
@@ -352,18 +610,33 @@ export async function publishDigest(digest: DailyDigest, options: PublishDigestO
       },
     });
 
-    await transaction.agentRun.create({
-      data: {
-        digestDate: databaseDate,
-        trigger: options.trigger === "cron" ? AgentRunTrigger.CRON : AgentRunTrigger.MANUAL,
-        status: AgentRunStatus.SUCCEEDED,
-        model: options.model,
-        retrievedDocumentCount: options.retrievedDocumentCount,
-        publishedStoryCount: digest.stories.length,
-        digestId: publishedDigest.id,
-        completedAt: new Date(),
-      },
-    });
+    if (options.agentRunId) {
+      await transaction.agentRun.update({
+        where: { id: options.agentRunId },
+        data: {
+          status: AgentRunStatus.SUCCEEDED,
+          model: options.model,
+          retrievedDocumentCount: options.retrievedDocumentCount,
+          publishedStoryCount: digest.stories.length,
+          digestId: publishedDigest.id,
+          errorMessage: null,
+          completedAt: new Date(),
+        },
+      });
+    } else {
+      await transaction.agentRun.create({
+        data: {
+          digestDate: databaseDate,
+          trigger: options.trigger === "cron" ? AgentRunTrigger.CRON : AgentRunTrigger.MANUAL,
+          status: AgentRunStatus.SUCCEEDED,
+          model: options.model,
+          retrievedDocumentCount: options.retrievedDocumentCount,
+          publishedStoryCount: digest.stories.length,
+          digestId: publishedDigest.id,
+          completedAt: new Date(),
+        },
+      });
+    }
     }, {
       maxWait: 10_000,
       timeout: 30_000,
@@ -382,6 +655,19 @@ export async function publishDigest(digest: DailyDigest, options: PublishDigestO
 }
 
 export async function recordFailedAgentRun(options: RecordFailedAgentRunOptions) {
+  if (options.agentRunId) {
+    await getPrismaClient().agentRun.update({
+      where: { id: options.agentRunId },
+      data: {
+        status: AgentRunStatus.FAILED,
+        model: options.model,
+        errorMessage: options.errorMessage.slice(0, 2_000),
+        completedAt: new Date(),
+      },
+    });
+    return;
+  }
+
   await getPrismaClient().agentRun.create({
     data: {
       digestDate: digestDateToDatabaseDate(options.digestDate),

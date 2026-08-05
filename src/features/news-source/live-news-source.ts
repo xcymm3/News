@@ -24,6 +24,7 @@ export type RssNewsSource = {
   name: string;
   url: string;
   language: string;
+  maxRecords?: number;
 };
 
 type GdeltArticle = {
@@ -42,7 +43,7 @@ const GDELT_ARTICLE_LIST_URL = "https://api.gdeltproject.org/api/v2/doc/doc";
 const DEFAULT_QUERY = '(diplomacy OR conflict OR trade OR sanctions OR "international relations")';
 const DEFAULT_TIMESPAN = "24h";
 const DEFAULT_MAX_RECORDS = 25;
-const MAX_RECORDS = 50;
+const MAX_RECORDS = 80;
 const REQUEST_TIMEOUT_MS = 8_000;
 const CACHE_TTL_MS = 5 * 60 * 1_000;
 
@@ -59,30 +60,35 @@ export const DEFAULT_CHINESE_RSS_SOURCES: readonly RssNewsSource[] = [
     name: "中国新闻网",
     url: "https://www.chinanews.com.cn/rss/scroll-news.xml",
     language: "zh-CN",
+    maxRecords: 30,
   },
   {
     id: "36kr-general",
     name: "36氪",
     url: "https://36kr.com/feed",
     language: "zh-CN",
+    maxRecords: 30,
   },
   {
     id: "cna-international",
-    name: "中央社",
+    name: "中央社国际",
     url: "https://feeds.feedburner.com/rsscna/intworld",
     language: "zh-Hant",
+    maxRecords: 20,
   },
   {
     id: "ithome",
     name: "IT之家",
     url: "https://www.ithome.com/rss/",
     language: "zh-CN",
+    maxRecords: 60,
   },
   {
     id: "huxiu",
     name: "虎嗅",
     url: "https://rss.huxiu.com/",
     language: "zh-CN",
+    maxRecords: 22,
   },
 ];
 
@@ -161,6 +167,10 @@ function getConfiguredMaxRecords() {
   const value = Number(process.env.NEWS_SOURCE_MAX_RECORDS);
 
   return Number.isInteger(value) && value > 0 ? Math.min(value, MAX_RECORDS) : DEFAULT_MAX_RECORDS;
+}
+
+function getRssRecordLimit(source: RssNewsSource) {
+  return Math.min(source.maxRecords ?? getConfiguredMaxRecords(), MAX_RECORDS);
 }
 
 function toGdeltRawArticle(value: unknown): RawNewsArticle | null {
@@ -317,7 +327,7 @@ async function fetchRssSource(source: RssNewsSource) {
 
     return {
       source,
-      articles: parseRssArticles(responseText, source, getConfiguredMaxRecords()),
+      articles: parseRssArticles(responseText, source, getRssRecordLimit(source)),
     };
   } catch (error) {
     if (error instanceof LiveNewsSourceError) {
@@ -350,6 +360,10 @@ async function fetchLatestFromRssSources(sources: readonly RssNewsSource[], prov
     sourceNames: [...new Set(usableResponses.map((response) => response.source.name))],
     fetchedAt: new Date().toISOString(),
   };
+}
+
+export async function getLatestChineseRssNews(): Promise<Omit<LatestLiveNews, "cacheStatus">> {
+  return fetchLatestFromRssSources(DEFAULT_CHINESE_RSS_SOURCES, "multi-rss-zh");
 }
 
 async function fetchLatestFromGdelt(): Promise<Omit<LatestLiveNews, "cacheStatus">> {
