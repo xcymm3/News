@@ -51,6 +51,9 @@ const AGENT_RUN_STAGE_NAMES = {
   PUBLISH: AgentRunStageName.PUBLISH,
 } as const;
 
+const OBSERVABILITY_WRITE_MAX_ATTEMPTS = 3;
+const OBSERVABILITY_RETRY_DELAY_MS = 500;
+
 export type AgentRunStageKey = keyof typeof AGENT_RUN_STAGE_POSITIONS;
 
 export type AgentRunStageDetails = Record<string, string | number | boolean | null>;
@@ -87,6 +90,13 @@ export type AgentRunTracker = {
   failRun(error: unknown): Promise<void>;
 };
 
+export class AgentRunTrackingError extends Error {
+  constructor(cause?: unknown) {
+    super("无法初始化 Agent 运行记录，请稍后重试。", { cause });
+    this.name = "AgentRunTrackingError";
+  }
+}
+
 export class DigestPersistenceError extends Error {
   constructor() {
     super("日报已生成，但保存到数据库时失败。请稍后重试。");
@@ -106,19 +116,44 @@ function logObservabilityWriteError(action: string, error: unknown) {
   console.error(`Failed to ${action} for the Agent observability dashboard.`, error);
 }
 
+function waitForObservabilityRetry(attempt: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, OBSERVABILITY_RETRY_DELAY_MS * attempt);
+  });
+}
+
+async function runObservabilityWrite<T>(action: string, task: () => Promise<T>) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= OBSERVABILITY_WRITE_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+
+      if (attempt < OBSERVABILITY_WRITE_MAX_ATTEMPTS) {
+        await waitForObservabilityRetry(attempt);
+      }
+    }
+  }
+
+  logObservabilityWriteError(action, lastError);
+  throw lastError;
+}
+
 export async function startAgentRunTracker({
   digestDate,
   trigger,
-}: Pick<RecordFailedAgentRunOptions, "digestDate" | "trigger">): Promise<AgentRunTracker | null> {
+}: Pick<RecordFailedAgentRunOptions, "digestDate" | "trigger">): Promise<AgentRunTracker> {
   try {
     const prisma = getPrismaClient();
-    const agentRun = await prisma.agentRun.create({
+    const agentRun = await runObservabilityWrite("start Agent run", () => prisma.agentRun.create({
       data: {
         digestDate: digestDateToDatabaseDate(digestDate),
         trigger: trigger === "cron" ? AgentRunTrigger.CRON : AgentRunTrigger.MANUAL,
         status: AgentRunStatus.RUNNING,
       },
-    });
+    }));
     const stageStartedAt = new Map<AgentRunStageKey, number>();
 
     return {
@@ -127,8 +162,7 @@ export async function startAgentRunTracker({
         const startedAt = new Date();
         stageStartedAt.set(stage, startedAt.valueOf());
 
-        try {
-          await prisma.agentRunStage.upsert({
+        await runObservabilityWrite(`start ${stage} stage`, () => prisma.agentRunStage.upsert({
             where: {
               agentRunId_stage: {
                 agentRunId: agentRun.id,
@@ -153,17 +187,13 @@ export async function startAgentRunTracker({
               details: options.details as Prisma.InputJsonValue | undefined,
               startedAt,
             },
-          });
-        } catch (error) {
-          logObservabilityWriteError(`start ${stage} stage`, error);
-        }
+          }));
       },
       async completeStage(stage, options = {}) {
         const completedAt = new Date();
         const startedAt = stageStartedAt.get(stage);
 
-        try {
-          await prisma.agentRunStage.update({
+        await runObservabilityWrite(`complete ${stage} stage`, () => prisma.agentRunStage.update({
             where: {
               agentRunId_stage: {
                 agentRunId: agentRun.id,
@@ -177,10 +207,7 @@ export async function startAgentRunTracker({
               durationMs: startedAt === undefined ? undefined : Math.max(completedAt.valueOf() - startedAt, 0),
               completedAt,
             },
-          });
-        } catch (error) {
-          logObservabilityWriteError(`complete ${stage} stage`, error);
-        }
+          }));
       },
       async failStage(stage, error) {
         const completedAt = new Date();
@@ -221,8 +248,7 @@ export async function startAgentRunTracker({
       },
     };
   } catch (error) {
-    logObservabilityWriteError("start Agent run", error);
-    return null;
+    throw new AgentRunTrackingError(error);
   }
 }
 

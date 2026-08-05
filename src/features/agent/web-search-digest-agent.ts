@@ -5,6 +5,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { evaluateAgentRunQuality } from "@/features/digest/agent-run-quality-evaluation";
 import { validateGeneratedDigest } from "@/features/digest/live-digest-generator";
 import {
+  AgentRunTrackingError,
   publishDigest,
   recordAgentRunEventDecisions,
   recordAgentRunQualityEvaluation,
@@ -1151,37 +1152,49 @@ export async function generateAndPublishWebSearchDigest(
   digestDate: string,
   trigger: "manual" | "cron",
 ): Promise<PublishedWebSearchDigestResult> {
-  const tracker = await startAgentRunTracker({ digestDate, trigger });
+  let tracker: AgentRunTracker;
+
+  try {
+    tracker = await startAgentRunTracker({ digestDate, trigger });
+  } catch (error) {
+    if (error instanceof AgentRunTrackingError) {
+      throw new WebSearchDigestAgentError(
+        "WEB_RESEARCH_UNAVAILABLE",
+        503,
+        "运行记录服务暂时不可用，本次日报未执行，请稍后重试。",
+      );
+    }
+
+    throw error;
+  }
 
   try {
     const result = await runWebSearchDigest(digestDate, tracker);
-    await tracker?.startStage("PUBLISH", { inputCount: result.digest.stories.length });
+    await tracker.startStage("PUBLISH", { inputCount: result.digest.stories.length });
 
     try {
       const digest = await publishDigest(result.digest, {
         trigger,
         model: result.model,
         retrievedDocumentCount: result.retrievedDocumentCount,
-        agentRunId: tracker?.agentRunId,
+        agentRunId: tracker.agentRunId,
       });
-      if (tracker) {
-        await recordAgentRunQualityEvaluation({
-          agentRunId: tracker.agentRunId,
-          evaluation: evaluateAgentRunQuality(digest),
-        });
-      }
-      await tracker?.completeStage("PUBLISH", { outputCount: digest.stories.length });
+      await recordAgentRunQualityEvaluation({
+        agentRunId: tracker.agentRunId,
+        evaluation: evaluateAgentRunQuality(digest),
+      });
+      await tracker.completeStage("PUBLISH", { outputCount: digest.stories.length });
 
       return {
         ...result,
         digest,
       };
     } catch (error) {
-      await tracker?.failStage("PUBLISH", error);
+      await tracker.failStage("PUBLISH", error);
       throw error;
     }
   } catch (error) {
-    await tracker?.failRun(error);
+    await tracker.failRun(error);
     throw error;
   }
 }
