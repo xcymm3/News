@@ -914,13 +914,15 @@ async function retrieveEventClusters(
           return source ? [source] : [];
         }),
     }))
-  const readableEvents = readableClusters.filter(({ sources }) => new Set(sources.map((source) => source.sourceDomain)).size >= MINIMUM_SOURCE_DOMAINS_PER_EVENT);
-  const unreadableEvents = readableClusters.filter(({ sources }) => new Set(sources.map((source) => source.sourceDomain)).size < MINIMUM_SOURCE_DOMAINS_PER_EVENT);
+  // 双来源事件会在候选排序中优先出现；当天可交叉验证的事件不足 12 条时，
+  // 允许已有一篇实际可读原文的候补补位，避免整份日报因来源门槛而无法发布。
+  const readableEvents = readableClusters.filter(({ sources }) => sources.length > 0);
+  const unreadableEvents = readableClusters.filter(({ sources }) => sources.length === 0);
 
   await recordTrackedEventDecisions(tracker, unreadableEvents.map(({ cluster, sources, selectionScore, selectionDetails }) => toEventDecision(cluster, {
     phase: "FETCH",
     decision: "REJECTED",
-    reason: "INSUFFICIENT_READABLE_SOURCES",
+    reason: "NO_READABLE_SOURCE",
     readableSourceCount: new Set(sources.map((source) => source.sourceDomain)).size,
     score: selectionScore,
     scoreDetails: selectionDetails,
